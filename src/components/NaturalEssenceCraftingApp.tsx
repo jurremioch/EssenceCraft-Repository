@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import {
   BadgeCheck,
   Calculator,
   Clock3,
   FlaskConical,
+  Gauge,
   Info,
+  Minus,
+  PackageMinus,
+  PackagePlus,
+  Plus,
   RotateCcw,
   Sparkles,
+  Target,
   Trash2,
 } from "lucide-react";
 
@@ -43,7 +50,7 @@ import {
 } from "@/lib/rules";
 import type { Inventory, RiskLevel, TierKey } from "@/lib/rules";
 import { loadState, saveState } from "@/lib/storage";
-import { clampInt, d20, formatMinutes, parseCSVInts } from "@/lib/util";
+import { clampInt, cn, d20, formatMinutes, parseCSVInts } from "@/lib/util";
 
 const RESOURCES: (keyof Inventory)[] = [
   "raw",
@@ -530,17 +537,40 @@ export function NaturalEssenceCraftingApp({
   const renderTierPanel = (tier: TierKey) => {
     const rule = getTierRule(tier);
     const risk = riskSelections[tier];
-    const attempts = attemptCounts[tier];
+    const attempts = Math.max(1, attemptCounts[tier]);
     const extraRawAE = tier === "T4" ? Math.max(0, t4ExtraRawAE) : 0;
     const { dc, wastedExtra } = computeDc(tier, risk, extraRawAE);
-    const profile = computeSuccessProfile(tier, risk, extraRawAE, modifier, effectiveAdvantage);
+    const profile = computeSuccessProfile(
+      tier,
+      risk,
+      extraRawAE,
+      modifier,
+      effectiveAdvantage,
+    );
     const salvageChance = profile.salvageChance;
     const feasible = computeMaxAttempts(state.inventory, tier, risk, extraRawAE);
     const riskRule = getRiskRule(tier, risk);
     const attemptCosts = computeAttemptCost(tier, risk, extraRawAE);
-    const disabled =
-      attempts < 1 || feasible <= 0 || attempts > feasible || !Number.isFinite(feasible);
     const totalTime = attempts * riskRule.timeMinutes;
+
+    const missingResources = RESOURCES.flatMap((resource) => {
+      const perAttempt = attemptCosts[resource] ?? 0;
+      if (!perAttempt) return [];
+      const need = perAttempt * attempts;
+      const have = state.inventory[resource] ?? 0;
+      const shortfall = need - have;
+      return shortfall > 0 ? [`${shortfall} more ${RESOURCE_LABELS[resource]}`] : [];
+    }).join(", ");
+
+    let disabledReason: string | null = null;
+    if (attempts < 1) {
+      disabledReason = "Enter at least one attempt.";
+    } else if (feasible <= 0) {
+      disabledReason = missingResources || "Not enough resources for an attempt.";
+    } else if (Number.isFinite(feasible) && attempts > feasible) {
+      disabledReason = missingResources || "Reduce attempts or add resources.";
+    }
+
     const requirementChips = RESOURCES.flatMap((resource) => {
       const perAttempt = attemptCosts[resource];
       if (!perAttempt) return [];
@@ -548,36 +578,93 @@ export function NaturalEssenceCraftingApp({
       const have = state.inventory[resource] ?? 0;
       const enough = have >= need;
       return [
-        <span
+        <Badge
           key={resource}
-          className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${
+          variant="outline"
+          className={cn(
+            "gap-1 rounded-full border px-3 py-1 text-xs",
             enough
               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-rose-200 bg-rose-50 text-rose-700"
-          }`}
+              : "border-rose-200 bg-rose-50 text-rose-700",
+          )}
         >
-          Need {need} {RESOURCE_LABELS[resource]} · Have {have}
-        </span>,
+          Need {need}
+          <span className="text-slate-400">·</span>
+          Have {have}
+        </Badge>,
       ];
     });
 
+    const consumesPerAttempt = RESOURCES.flatMap((resource) => {
+      const value = attemptCosts[resource];
+      if (!value) return [];
+      return [
+        <Badge
+          key={`consume-${resource}`}
+          variant="outline"
+          className="gap-1 rounded-full border-slate-200/80 bg-white text-xs text-slate-700"
+        >
+          <PackageMinus className="h-3.5 w-3.5 text-rose-500" />-{value} {RESOURCE_LABELS[resource]}
+        </Badge>,
+      ];
+    });
+
+    const producesOnSuccess = RESOURCES.flatMap((resource) => {
+      const value = rule.success[resource];
+      if (!value) return [];
+      return [
+        <Badge
+          key={`produce-${resource}`}
+          variant="outline"
+          className="gap-1 rounded-full border-slate-200/80 bg-white text-xs text-slate-700"
+        >
+          <PackagePlus className="h-3.5 w-3.5 text-emerald-500" />+{value} {RESOURCE_LABELS[resource]}
+        </Badge>,
+      ];
+    });
+
+    const infoPills = [
+      {
+        key: "success",
+        icon: <Sparkles className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />,
+        label: `Success ${Math.round(profile.successChance * 100)}%`,
+      },
+      salvageChance !== undefined
+        ? {
+            key: "salvage",
+            icon: <BadgeCheck className="h-3.5 w-3.5 text-sky-500" aria-hidden="true" />,
+            label: `Salvage ${Math.round(salvageChance * 100)}%`,
+          }
+        : null,
+      {
+        key: "dc",
+        icon: <Target className="h-3.5 w-3.5 text-indigo-500" aria-hidden="true" />,
+        label: `DC ${dc}`,
+      },
+      {
+        key: "time",
+        icon: <Clock3 className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />,
+        label: formatMinutes(totalTime),
+      },
+      {
+        key: "feasible",
+        icon: <Gauge className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />,
+        label: `Feasible ${Number.isFinite(feasible) ? feasible : "∞"}`,
+      },
+    ].filter(Boolean) as { key: string; icon: ReactNode; label: string }[];
+
     return (
-      <Card className="shadow-sm">
-        <CardHeader className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle className="text-xl font-semibold">
-              <span
-                className={`bg-gradient-to-r ${TIER_GRADIENTS[tier]} bg-clip-text text-transparent`}
-              >
-                {rule.subtitle}
-              </span>
-            </CardTitle>
-            <Badge variant="outline" className="border-slate-300 bg-slate-100 text-slate-700">
-              {risk.charAt(0).toUpperCase() + risk.slice(1)} risk
-            </Badge>
-          </div>
-          <CardDescription className="text-sm text-slate-500">
-            Time {riskRule.timeMinutes}m per attempt · DC {dc}
+      <Card className="border-slate-200/80 bg-white/95 p-5 shadow-[0_16px_30px_rgba(15,23,42,0.08)]">
+        <CardHeader className="gap-2 pb-4">
+          <CardTitle className="text-2xl font-semibold text-slate-900">
+            <span
+              className={`bg-gradient-to-r ${TIER_GRADIENTS[tier]} bg-clip-text text-transparent`}
+            >
+              {rule.subtitle}
+            </span>
+          </CardTitle>
+          <CardDescription className="text-xs text-slate-500">
+            {riskRule.timeMinutes} minutes per attempt · DC {dc}
             {tier === "T4" && wastedExtra > 0 ? (
               <span className="ml-2 text-xs text-amber-600">
                 {wastedExtra} RawAE wasted beyond DC {MIN_DC}
@@ -585,145 +672,226 @@ export function NaturalEssenceCraftingApp({
             ) : null}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="grid compact-gap gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor={`${tier}-risk`}>Risk profile</Label>
-              <Select
-                value={risk}
-                onValueChange={(value) =>
-                  setRiskSelections((prev) => ({ ...prev, [tier]: value as RiskLevel }))
-                }
-              >
-                <SelectTrigger id={`${tier}-risk`}>
-                  <SelectValue placeholder="Select risk" />
-                </SelectTrigger>
-                <SelectContent>
-                  {getSupportedRisks(tier).map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option.charAt(0).toUpperCase() + option.slice(1)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={`${tier}-attempts`}>Attempts</Label>
-              <div className="flex flex-wrap items-center gap-2">
-                <Input
-                  id={`${tier}-attempts`}
-                  type="number"
-                  min={1}
-                  value={attempts}
-                  onChange={(event) =>
-                    setAttemptCounts((prev) => ({
-                      ...prev,
-                      [tier]: clampInt(Number(event.target.value), 1, 999),
-                    }))
-                  }
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    setAttemptCounts((prev) => ({
-                      ...prev,
-                      [tier]: feasible === Infinity ? prev[tier] : Math.max(1, feasible),
-                    }))
+        <CardContent className="grid gap-5 compact-gap md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <div className="flex flex-col gap-4">
+            <div className="grid gap-3 compact-gap sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${tier}-risk`}>Risk profile</Label>
+                <Select
+                  value={risk}
+                  onValueChange={(value) =>
+                    setRiskSelections((prev) => ({ ...prev, [tier]: value as RiskLevel }))
                   }
                 >
-                  Max feasible
-                </Button>
+                  <SelectTrigger id={`${tier}-risk`}>
+                    <SelectValue placeholder="Select risk" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getSupportedRisks(tier).map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option.charAt(0).toUpperCase() + option.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <p className="text-[11px] text-slate-500">
-                Current max: {Number.isFinite(feasible) ? feasible : "∞"}
-              </p>
-            </div>
-            {tier === "T4" ? (
-              <div className="space-y-2">
-                <Label htmlFor="t4-extra">Extra RawAE / attempt</Label>
-                <Input
-                  id="t4-extra"
-                  type="number"
-                  min={0}
-                  value={t4ExtraRawAE}
-                  onChange={(event) =>
-                    setT4ExtraRawAE(Math.max(0, Math.round(Number(event.target.value))))
-                  }
-                />
-                <p className="text-[11px] text-slate-500">
-                  Each RawAE lowers DC by 4 (min {MIN_DC}). Success yields {formatDelta(rule.success)}.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label>Outcome</Label>
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                  Success yields {formatDelta(rule.success)}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${tier}-attempts`}>Attempts</Label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-label="Decrease attempts"
+                    onClick={() =>
+                      setAttemptCounts((prev) => ({
+                        ...prev,
+                        [tier]: clampInt(prev[tier] - 1, 1, 999),
+                      }))
+                    }
+                  >
+                    <Minus className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                  <Input
+                    id={`${tier}-attempts`}
+                    type="number"
+                    min={1}
+                    value={attempts}
+                    onChange={(event) =>
+                      setAttemptCounts((prev) => ({
+                        ...prev,
+                        [tier]: clampInt(Number(event.target.value), 1, 999),
+                      }))
+                    }
+                    className="w-[90px] text-center"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-label="Increase attempts"
+                    onClick={() =>
+                      setAttemptCounts((prev) => ({
+                        ...prev,
+                        [tier]: clampInt(prev[tier] + 1, 1, 999),
+                      }))
+                    }
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="ml-1 text-xs text-indigo-600 hover:text-indigo-700"
+                    onClick={() =>
+                      setAttemptCounts((prev) => ({
+                        ...prev,
+                        [tier]: feasible === Infinity ? prev[tier] : Math.max(1, feasible),
+                      }))
+                    }
+                  >
+                    Fill max
+                  </Button>
                 </div>
               </div>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
-            <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700">
-              <Sparkles className="mr-1 h-3.5 w-3.5" />
-              Success {Math.round(profile.successChance * 100)}%
-            </Badge>
-            {salvageChance !== undefined ? (
-              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
-                <BadgeCheck className="mr-1 h-3.5 w-3.5" />
-                Salvage {Math.round(salvageChance * 100)}%
-              </Badge>
-            ) : null}
-            <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
-              <Clock3 className="mr-1 h-3.5 w-3.5" />
-              {formatMinutes(totalTime)}
-            </Badge>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <Calculator className="h-4 w-4 text-indigo-600" /> Expected value per attempt
-              <Tooltip>
-                <TooltipTrigger aria-label="Expected value explanation">
-                  <Info className="h-4 w-4 text-slate-400" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  Success, failure, and salvage chances combined into an average resource change per attempt.
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
-              {renderEvChips(tier, risk, extraRawAE, profile.successChance, salvageChance)}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Requirements for {attempts} attempt{attempts === 1 ? "" : "s"}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {requirementChips.length > 0 ? (
-                requirementChips
+              {tier === "T4" ? (
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <Label htmlFor="t4-extra">Extra RawAE per attempt</Label>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      aria-label="Decrease extra RawAE"
+                      onClick={() => setT4ExtraRawAE((prev) => Math.max(0, prev - 1))}
+                    >
+                      <Minus className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    <Input
+                      id="t4-extra"
+                      type="number"
+                      min={0}
+                      value={t4ExtraRawAE}
+                      onChange={(event) =>
+                        setT4ExtraRawAE(Math.max(0, Math.round(Number(event.target.value))))
+                      }
+                      className="w-[90px] text-center"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      aria-label="Increase extra RawAE"
+                      onClick={() => setT4ExtraRawAE((prev) => prev + 1)}
+                    >
+                      <Plus className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    <p className="text-[11px] text-slate-500">
+                      Lowers DC by 4 each (minimum {MIN_DC}).
+                    </p>
+                  </div>
+                </div>
               ) : (
-                <span className="text-xs text-slate-500">No resources required.</span>
+                <div className="flex flex-col gap-1.5">
+                  <Label>On success</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {producesOnSuccess.length > 0 ? (
+                      producesOnSuccess
+                    ) : (
+                      <span className="text-xs text-slate-500">No resource change.</span>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
+
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-slate-600">
+                Requirements for {attempts} attempt{attempts === 1 ? "" : "s"}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {requirementChips.length > 0 ? (
+                  requirementChips
+                ) : (
+                  <span className="text-xs text-slate-500">No resources required.</span>
+                )}
+              </div>
+            </div>
+
+            <Tooltip disableHoverableContent={!disabledReason}>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    type="button"
+                    onClick={() => runCrafting(tier)}
+                    disabled={Boolean(disabledReason)}
+                    className={cn(
+                      "w-full justify-center",
+                      disabledReason
+                        ? "cursor-not-allowed opacity-60"
+                        : "bg-indigo-600 text-white hover:bg-indigo-700",
+                    )}
+                  >
+                    {disabledReason ? "Unavailable" : "Run batch"}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {disabledReason ? (
+                <TooltipContent>{disabledReason}</TooltipContent>
+              ) : null}
+            </Tooltip>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Button
-              type="button"
-              onClick={() => runCrafting(tier)}
-              disabled={disabled}
-              variant={disabled ? "secondary" : "primary"}
-            >
-              {disabled && attempts > feasible ? "Insufficient" : "Run"}
-            </Button>
-            <div className="text-xs text-slate-500">
-              Feasible: {Number.isFinite(feasible) ? feasible : "∞"} attempt
-              {Number.isFinite(feasible) && feasible !== 1 ? "s" : ""}
+          <div className="flex flex-col gap-4 rounded-xl border border-slate-200/70 bg-slate-50/70 p-4">
+            <div className="flex flex-wrap gap-2">
+              {infoPills.map((pill) => (
+                <Badge
+                  key={pill.key}
+                  variant="outline"
+                  className="gap-1 rounded-full border-slate-200/80 bg-white/90 text-xs text-slate-700 shadow-sm"
+                >
+                  {pill.icon}
+                  {pill.label}
+                </Badge>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-slate-600">Consumes per attempt</div>
+              <div className="flex flex-wrap gap-2">
+                {consumesPerAttempt.length > 0 ? (
+                  consumesPerAttempt
+                ) : (
+                  <span className="text-xs text-slate-500">No costs.</span>
+                )}
+              </div>
+            </div>
+
+            {tier === "T4" ? (
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-slate-600">On success</div>
+                <div className="flex flex-wrap gap-2">
+                  {producesOnSuccess.length > 0 ? (
+                    producesOnSuccess
+                  ) : (
+                    <span className="text-xs text-slate-500">No resource change.</span>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <Calculator className="h-4 w-4 text-indigo-600" aria-hidden="true" />
+                Expected value per attempt
+                <Tooltip>
+                  <TooltipTrigger aria-label="Expected value explanation">
+                    <Info className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Success, failure, and salvage chances combined into an average resource change per attempt.
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
+                {renderEvChips(tier, risk, extraRawAE, profile.successChance, salvageChance)}
+              </div>
             </div>
           </div>
         </CardContent>
@@ -733,18 +901,18 @@ export function NaturalEssenceCraftingApp({
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col gap-8 compact-gap pb-16">
-        <Card className="shadow-sm">
-          <CardHeader className="mb-0 space-y-2">
-            <CardTitle className="flex items-center justify-between text-2xl font-bold text-slate-900">
-              <span>Natural Essence Crafting</span>
+      <div className="flex flex-col gap-6 compact-gap pb-16">
+        <Card className="border-slate-200/80 bg-white/95 p-5 shadow-[0_12px_24px_rgba(15,23,42,0.06)]">
+          <CardHeader className="mb-0 gap-2">
+            <CardTitle className="flex items-center justify-between text-2xl font-semibold text-slate-900">
+              <span>Natural essence crafting</span>
               <FlaskConical className="h-7 w-7 text-indigo-600" aria-hidden="true" />
             </CardTitle>
             <CardDescription className="text-sm text-slate-500">
               Track inventory, roll checks, and keep your refinement pipeline humming.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-row flex-wrap gap-2 text-xs font-medium text-slate-600">
+          <CardContent className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
             <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700">
               Session {formatMinutes(state.sessionMinutes)}
             </Badge>
@@ -757,18 +925,18 @@ export function NaturalEssenceCraftingApp({
           </CardContent>
         </Card>
 
-        <div className="grid compact-gap gap-6 lg:grid-cols-[2fr_1fr]">
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-slate-900">Inventory</CardTitle>
-              <CardDescription className="text-sm text-slate-500">
+        <div className="grid gap-4 compact-gap md:grid-cols-3">
+          <Card className="md:col-span-2 border-slate-200/80 bg-white/95 p-5 shadow-[0_12px_24px_rgba(15,23,42,0.06)]">
+            <CardHeader className="mb-0 gap-1.5">
+              <CardTitle className="text-xl font-semibold text-slate-900">Inventory</CardTitle>
+              <CardDescription className="text-xs text-slate-500">
                 Update your current stock. Crafting actions adjust automatically.
               </CardDescription>
             </CardHeader>
-            <CardContent className="!grid compact-gap gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <CardContent className="grid gap-3 compact-gap sm:grid-cols-2 xl:grid-cols-3">
               {RESOURCES.map((resource) => (
                 <div key={resource} className="flex flex-col gap-1.5">
-                  <Label htmlFor={`inv-${resource}`} className="text-[11px] font-semibold tracking-wide text-slate-600">
+                  <Label htmlFor={`inv-${resource}`} className="text-xs font-medium text-slate-600">
                     {RESOURCE_LABELS[resource]}
                   </Label>
                   <Input
@@ -779,7 +947,7 @@ export function NaturalEssenceCraftingApp({
                     onChange={(event) =>
                       handleInventoryChange(resource, Math.max(0, Number(event.target.value)))
                     }
-                    className="max-w-[140px]"
+                    className="w-[96px]"
                   />
                 </div>
               ))}
@@ -794,15 +962,15 @@ export function NaturalEssenceCraftingApp({
             </CardContent>
           </Card>
 
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold text-slate-900">Settings & Rolls</CardTitle>
-              <CardDescription className="text-sm text-slate-500">
+          <Card className="border-slate-200/80 bg-white/95 p-5 shadow-[0_12px_24px_rgba(15,23,42,0.06)]">
+            <CardHeader className="mb-0 gap-1.5">
+              <CardTitle className="text-xl font-semibold text-slate-900">Settings & rolls</CardTitle>
+              <CardDescription className="text-xs text-slate-500">
                 Configure modifiers, rolling behaviour, and queue manual results.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4 compact-gap">
-              <div className="grid compact-gap gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 compact-gap sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="modifier">Crafting modifier</Label>
                   <Input
@@ -818,7 +986,7 @@ export function NaturalEssenceCraftingApp({
                         },
                       }))
                     }
-                    className="max-w-[120px]"
+                    className="w-[96px]"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -852,7 +1020,7 @@ export function NaturalEssenceCraftingApp({
               </div>
 
               <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-2">
                   <div>
                     <p className="text-sm font-semibold text-slate-700">Auto rolling</p>
                     <p className="text-[11px] text-slate-500">Toggle manual queues for precise control.</p>
@@ -875,10 +1043,10 @@ export function NaturalEssenceCraftingApp({
                     <span>Auto</span>
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-2">
                   <div>
                     <p className="text-sm font-semibold text-slate-700">Compact mode</p>
-                    <p className="text-[11px] text-slate-500">Reduces padding and gaps across the interface.</p>
+                    <p className="text-[11px] text-slate-500">Reduce padding and gaps across the interface.</p>
                   </div>
                   <Switch
                     checked={compactMode}
@@ -888,7 +1056,7 @@ export function NaturalEssenceCraftingApp({
                 </div>
               </div>
 
-              <div className="grid compact-gap gap-3">
+              <div className="grid gap-3 compact-gap">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="manual-checks">Manual check rolls (comma separated)</Label>
                   <Input
@@ -902,7 +1070,7 @@ export function NaturalEssenceCraftingApp({
                         handleManualQueueCommit("check");
                       }
                     }}
-                    placeholder="e.g. 12, 5, 18"
+                    placeholder="e.g. 12,5,18"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -918,7 +1086,7 @@ export function NaturalEssenceCraftingApp({
                         handleManualQueueCommit("salvage");
                       }
                     }}
-                    placeholder="e.g. 7, 16"
+                    placeholder="e.g. 7,16"
                   />
                 </div>
               </div>
@@ -929,7 +1097,7 @@ export function NaturalEssenceCraftingApp({
                 </Button>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <div className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 <p>
                   Recent rolls: {state.rolls.checks.length} main · {state.rolls.salvages.length} salvage.
                 </p>
@@ -940,7 +1108,8 @@ export function NaturalEssenceCraftingApp({
         </div>
 
         {statusMessage ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-sm">
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-sm">
+            <BadgeCheck className="h-4 w-4" aria-hidden="true" />
             {statusMessage}
           </div>
         ) : null}
@@ -950,7 +1119,7 @@ export function NaturalEssenceCraftingApp({
           onValueChange={(value) => setActiveTier(value as TierKey)}
           className="flex flex-col gap-5"
         >
-          <TabsList className="w-full max-w-full flex-wrap justify-start gap-2 bg-white">
+          <TabsList className="sticky top-0 z-10 w-full flex-wrap justify-start gap-2 rounded-full border border-slate-200/80 bg-white/90 p-1 shadow-sm backdrop-blur supports-[backdrop-filter]:backdrop-blur">
             {TIER_ORDER.map((tier) => (
               <TabsTrigger key={tier} value={tier}>
                 {tier}
@@ -958,7 +1127,7 @@ export function NaturalEssenceCraftingApp({
             ))}
           </TabsList>
           {TIER_ORDER.map((tier) => (
-            <TabsContent key={tier} value={tier} className="mt-5">
+            <TabsContent key={tier} value={tier} className="mt-4">
               {renderTierPanel(tier)}
             </TabsContent>
           ))}
@@ -968,7 +1137,7 @@ export function NaturalEssenceCraftingApp({
           <div className="grid compact-gap gap-6 md:grid-cols-2">
             <Card className="shadow-sm">
               <CardHeader className="sticky top-0 z-10 mb-0 space-y-1 bg-white/95 pb-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
-                <CardTitle className="text-base font-semibold text-slate-900">Recent Checks</CardTitle>
+                <CardTitle className="text-base font-semibold text-slate-900">Recent checks</CardTitle>
                 <CardDescription className="text-xs text-slate-500">
                   Latest main roll results with modifiers applied.
                 </CardDescription>
@@ -1005,7 +1174,7 @@ export function NaturalEssenceCraftingApp({
 
             <Card className="shadow-sm">
               <CardHeader className="sticky top-0 z-10 mb-0 space-y-1 bg-white/95 pb-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
-                <CardTitle className="text-base font-semibold text-slate-900">Recent Salvage</CardTitle>
+                <CardTitle className="text-base font-semibold text-slate-900">Recent salvage</CardTitle>
                 <CardDescription className="text-xs text-slate-500">
                   Salvage checks from failed attempts.
                 </CardDescription>
@@ -1043,7 +1212,7 @@ export function NaturalEssenceCraftingApp({
 
           <Card className="shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg font-semibold text-slate-900">Action Log</CardTitle>
+              <CardTitle className="text-lg font-semibold text-slate-900">Action log</CardTitle>
               <CardDescription className="text-sm text-slate-500">
                 Latest attempts with resource deltas.
               </CardDescription>
@@ -1074,4 +1243,5 @@ export function NaturalEssenceCraftingApp({
       <DiceOverlay rolls={diceOverlay} />
     </TooltipProvider>
   );
+
 }

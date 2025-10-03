@@ -1,4 +1,5 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import type { Transition } from "framer-motion";
 
 export interface DiceFace {
   id: string;
@@ -14,26 +15,36 @@ interface DiceOverlayProps {
 }
 
 export function DiceOverlay({ rolls }: DiceOverlayProps) {
+  const prefersReducedMotion = useReducedMotion();
+
+  const containerTransition: Transition = prefersReducedMotion
+    ? { duration: 0.2, ease: "linear" }
+    : { type: "spring", stiffness: 200, damping: 18 };
+
+  const faceTransition: Transition = prefersReducedMotion
+    ? { duration: 0.2, ease: "linear" }
+    : { type: "spring", stiffness: 150, damping: 16 };
+
   return (
     <AnimatePresence>
       {rolls && rolls.length > 0 ? (
         <motion.div
           key={rolls.map((face) => face.id).join("-")}
-          initial={{ opacity: 0, y: 40, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 20, scale: 0.95 }}
-          transition={{ type: "spring", stiffness: 200, damping: 18 }}
+          initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 40, scale: 0.95 }}
+          animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+          exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 20, scale: 0.95 }}
+          transition={containerTransition}
           className="fixed bottom-6 right-6 z-50 flex gap-3"
         >
           {rolls.map((face) => (
             <motion.div
               key={face.id}
-              initial={{ rotateX: -45, rotateY: 45 }}
-              animate={{ rotateX: 0, rotateY: 0 }}
-              transition={{ type: "spring", stiffness: 150, damping: 16 }}
-              className="relative flex min-w-[140px] flex-col gap-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-xl"
+              initial={prefersReducedMotion ? { opacity: 0 } : { rotateX: -45, rotateY: 45 }}
+              animate={prefersReducedMotion ? { opacity: 1 } : { rotateX: 0, rotateY: 0 }}
+              transition={faceTransition}
+              className="relative flex min-w-[140px] flex-col gap-1 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-slate-900 shadow-xl"
             >
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <div className="text-xs font-semibold text-slate-500">
                 {face.label}
               </div>
               <div className="text-3xl font-bold leading-none text-slate-900">
