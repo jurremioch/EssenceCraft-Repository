@@ -24,7 +24,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -126,6 +125,18 @@ const createDefaultState = (): AppState => ({
 
 const TIER_ORDER: TierKey[] = ["T2", "T3", "T4", "T5"];
 
+const TIER_GRADIENTS: Record<TierKey, string> = {
+  T2: "from-emerald-400 to-emerald-600",
+  T3: "from-sky-400 to-sky-600",
+  T4: "from-violet-400 to-violet-600",
+  T5: "from-amber-400 to-amber-600",
+};
+
+interface NaturalEssenceCraftingAppProps {
+  compactMode: boolean;
+  onToggleCompactMode: (value: boolean) => void;
+}
+
 function hasResources(inventory: Inventory, costs: Partial<Inventory>): boolean {
   return Object.entries(costs).every(([key, amount]) => {
     if (!amount) return true;
@@ -182,7 +193,10 @@ function mergeDeltas(...deltas: Partial<Inventory>[]): Partial<Inventory> {
   return result;
 }
 
-export function NaturalEssenceCraftingApp() {
+export function NaturalEssenceCraftingApp({
+  compactMode,
+  onToggleCompactMode,
+}: NaturalEssenceCraftingAppProps) {
   const [state, setState] = useState<AppState>(() => {
     const defaults = createDefaultState();
     const stored = loadState(defaults);
@@ -497,14 +511,20 @@ export function NaturalEssenceCraftingApp() {
     const chips = RESOURCES.filter((key) => (expected[key] ?? 0) !== 0).map((key) => {
       const value = expected[key] ?? 0;
       const sign = value > 0 ? "+" : "";
+      const tone =
+        value > 0
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : value < 0
+            ? "border-rose-200 bg-rose-50 text-rose-700"
+            : "border-slate-200 bg-slate-100 text-slate-700";
       return (
-        <Badge key={key} variant="secondary" className="bg-white/70 text-slate-700">
+        <Badge key={key} variant="outline" className={tone}>
           {sign}{value.toFixed(2)} {RESOURCE_LABELS[key]}
         </Badge>
       );
     });
 
-    return chips.length > 0 ? chips : <span className="text-sm text-slate-500">No net change</span>;
+    return chips.length > 0 ? chips : <span className="text-xs text-slate-500">No net change</span>;
   };
 
   const renderTierPanel = (tier: TierKey) => {
@@ -518,481 +538,540 @@ export function NaturalEssenceCraftingApp() {
     const feasible = computeMaxAttempts(state.inventory, tier, risk, extraRawAE);
     const riskRule = getRiskRule(tier, risk);
     const attemptCosts = computeAttemptCost(tier, risk, extraRawAE);
-    const disabled = attempts < 1 || feasible <= 0 || attempts > feasible || !Number.isFinite(feasible);
+    const disabled =
+      attempts < 1 || feasible <= 0 || attempts > feasible || !Number.isFinite(feasible);
     const totalTime = attempts * riskRule.timeMinutes;
+    const requirementChips = RESOURCES.flatMap((resource) => {
+      const perAttempt = attemptCosts[resource];
+      if (!perAttempt) return [];
+      const need = perAttempt * attempts;
+      const have = state.inventory[resource] ?? 0;
+      const enough = have >= need;
+      return [
+        <span
+          key={resource}
+          className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${
+            enough
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-rose-200 bg-rose-50 text-rose-700"
+          }`}
+        >
+          Need {need} {RESOURCE_LABELS[resource]} · Have {have}
+        </span>,
+      ];
+    });
 
     return (
-      <Card className={`relative overflow-hidden bg-gradient-to-br ${rule.gradient}`}>
-        <div className="pointer-events-none absolute inset-0 bg-white/75" />
-        <div className="relative">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>{rule.subtitle}</span>
-              <Badge variant="secondary" className="bg-white/80 text-slate-700">
-                {risk.charAt(0).toUpperCase() + risk.slice(1)} risk
-              </Badge>
+      <Card className="shadow-sm">
+        <CardHeader className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-xl font-semibold">
+              <span
+                className={`bg-gradient-to-r ${TIER_GRADIENTS[tier]} bg-clip-text text-transparent`}
+              >
+                {rule.subtitle}
+              </span>
             </CardTitle>
-            <CardDescription>
-              Time {riskRule.timeMinutes}m per attempt · DC {dc}
-              {tier === "T4" && wastedExtra > 0 ? (
-                <span className="ml-2 text-xs text-amber-600">
-                  {wastedExtra} RawAE wasted beyond DC {MIN_DC}
-                </span>
-              ) : null}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor={`${tier}-risk`}>Risk profile</Label>
-                <Select
-                  value={risk}
-                  onValueChange={(value) =>
-                    setRiskSelections((prev) => ({ ...prev, [tier]: value as RiskLevel }))
+            <Badge variant="outline" className="border-slate-300 bg-slate-100 text-slate-700">
+              {risk.charAt(0).toUpperCase() + risk.slice(1)} risk
+            </Badge>
+          </div>
+          <CardDescription className="text-sm text-slate-500">
+            Time {riskRule.timeMinutes}m per attempt · DC {dc}
+            {tier === "T4" && wastedExtra > 0 ? (
+              <span className="ml-2 text-xs text-amber-600">
+                {wastedExtra} RawAE wasted beyond DC {MIN_DC}
+              </span>
+            ) : null}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid compact-gap gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor={`${tier}-risk`}>Risk profile</Label>
+              <Select
+                value={risk}
+                onValueChange={(value) =>
+                  setRiskSelections((prev) => ({ ...prev, [tier]: value as RiskLevel }))
+                }
+              >
+                <SelectTrigger id={`${tier}-risk`}>
+                  <SelectValue placeholder="Select risk" />
+                </SelectTrigger>
+                <SelectContent>
+                  {getSupportedRisks(tier).map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option.charAt(0).toUpperCase() + option.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={`${tier}-attempts`}>Attempts</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  id={`${tier}-attempts`}
+                  type="number"
+                  min={1}
+                  value={attempts}
+                  onChange={(event) =>
+                    setAttemptCounts((prev) => ({
+                      ...prev,
+                      [tier]: clampInt(Number(event.target.value), 1, 999),
+                    }))
+                  }
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setAttemptCounts((prev) => ({
+                      ...prev,
+                      [tier]: feasible === Infinity ? prev[tier] : Math.max(1, feasible),
+                    }))
                   }
                 >
-                  <SelectTrigger id={`${tier}-risk`}>
-                    <SelectValue placeholder="Select risk" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getSupportedRisks(tier).map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option.charAt(0).toUpperCase() + option.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  Max feasible
+                </Button>
               </div>
+              <p className="text-[11px] text-slate-500">
+                Current max: {Number.isFinite(feasible) ? feasible : "∞"}
+              </p>
+            </div>
+            {tier === "T4" ? (
               <div className="space-y-2">
-                <Label htmlFor={`${tier}-attempts`}>Attempts</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id={`${tier}-attempts`}
-                    type="number"
-                    min={1}
-                    value={attempts}
-                    onChange={(event) =>
-                      setAttemptCounts((prev) => ({
-                        ...prev,
-                        [tier]: clampInt(Number(event.target.value), 1, 999),
-                      }))
-                    }
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() =>
-                      setAttemptCounts((prev) => ({
-                        ...prev,
-                        [tier]: feasible === Infinity ? prev[tier] : Math.max(1, feasible),
-                      }))
-                    }
-                  >
-                    Max feasible
-                  </Button>
-                </div>
-                <p className="text-xs text-slate-500">Current max: {Number.isFinite(feasible) ? feasible : "∞"}</p>
+                <Label htmlFor="t4-extra">Extra RawAE / attempt</Label>
+                <Input
+                  id="t4-extra"
+                  type="number"
+                  min={0}
+                  value={t4ExtraRawAE}
+                  onChange={(event) =>
+                    setT4ExtraRawAE(Math.max(0, Math.round(Number(event.target.value))))
+                  }
+                />
+                <p className="text-[11px] text-slate-500">
+                  Each RawAE lowers DC by 4 (min {MIN_DC}). Success yields {formatDelta(rule.success)}.
+                </p>
               </div>
-              {tier === "T4" ? (
-                <div className="space-y-2">
-                  <Label htmlFor="t4-extra">Extra RawAE / attempt</Label>
-                  <Input
-                    id="t4-extra"
-                    type="number"
-                    min={0}
-                    value={t4ExtraRawAE}
-                    onChange={(event) => setT4ExtraRawAE(Math.max(0, Math.round(Number(event.target.value))))}
-                  />
-                  <p className="text-xs text-slate-500">
-                    Each RawAE lowers DC by 4 (min {MIN_DC}). Success yields {formatDelta(rule.success)}.
-                  </p>
+            ) : (
+              <div className="space-y-2">
+                <Label>Outcome</Label>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  Success yields {formatDelta(rule.success)}
                 </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-600">
+            <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700">
+              <Sparkles className="mr-1 h-3.5 w-3.5" />
+              Success {Math.round(profile.successChance * 100)}%
+            </Badge>
+            {salvageChance !== undefined ? (
+              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                <BadgeCheck className="mr-1 h-3.5 w-3.5" />
+                Salvage {Math.round(salvageChance * 100)}%
+              </Badge>
+            ) : null}
+            <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
+              <Clock3 className="mr-1 h-3.5 w-3.5" />
+              {formatMinutes(totalTime)}
+            </Badge>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <Calculator className="h-4 w-4 text-indigo-600" /> Expected value per attempt
+              <Tooltip>
+                <TooltipTrigger aria-label="Expected value explanation">
+                  <Info className="h-4 w-4 text-slate-400" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  Success, failure, and salvage chances combined into an average resource change per attempt.
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
+              {renderEvChips(tier, risk, extraRawAE, profile.successChance, salvageChance)}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Requirements for {attempts} attempt{attempts === 1 ? "" : "s"}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {requirementChips.length > 0 ? (
+                requirementChips
               ) : (
-                <div className="space-y-2">
-                  <Label>Outcome</Label>
-                  <p className="rounded-lg bg-white/60 px-3 py-2 text-sm">
-                    Success yields {formatDelta(rule.success)}
-                  </p>
-                </div>
+                <span className="text-xs text-slate-500">No resources required.</span>
               )}
             </div>
+          </div>
 
-            <Separator />
-
-            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="outline" className="bg-white/80">
-                      <Sparkles className="mr-1 h-4 w-4" />
-                      Success {Math.round(profile.successChance * 100)}%
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>Chance for the main check with current modifier.</TooltipContent>
-                </Tooltip>
-                {salvageChance !== undefined ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Badge variant="outline" className="bg-white/80">
-                        <BadgeCheck className="mr-1 h-4 w-4" />
-                        Salvage on fail {Math.round(salvageChance * 100)}%
-                      </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent>Salvage chance ignores advantage/disadvantage.</TooltipContent>
-                  </Tooltip>
-                ) : null}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="outline" className="bg-white/80">
-                      <Clock3 className="mr-1 h-4 w-4" />
-                      {formatMinutes(totalTime)} total
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>Time flavour for the requested batch.</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Button
+              type="button"
+              onClick={() => runCrafting(tier)}
+              disabled={disabled}
+              variant={disabled ? "secondary" : "primary"}
+            >
+              {disabled && attempts > feasible ? "Insufficient" : "Run"}
+            </Button>
+            <div className="text-xs text-slate-500">
+              Feasible: {Number.isFinite(feasible) ? feasible : "∞"} attempt
+              {Number.isFinite(feasible) && feasible !== 1 ? "s" : ""}
             </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <Calculator className="h-4 w-4" /> Expected delta per attempt
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <Info className="h-4 w-4 text-slate-500" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      Success, failure, and salvage chances combined into an average resource change per attempt.
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {renderEvChips(tier, risk, extraRawAE, profile.successChance, salvageChance)}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap justify-between gap-3">
-              <Button
-                type="button"
-                onClick={() => runCrafting(tier)}
-                disabled={disabled}
-                variant={disabled ? "secondary" : "default"}
-              >
-                {disabled && attempts > feasible ? "Insufficient" : "Run"}
-              </Button>
-              <div className="text-xs text-slate-500">
-                Consumes: {formatDelta(scaleDelta(attemptCosts, -1))}
-              </div>
-            </div>
-          </CardContent>
-        </div>
+          </div>
+        </CardContent>
       </Card>
     );
   };
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-slate-900/95 pb-24 pt-10 text-slate-900">
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4">
-          <div className="grid gap-6 lg:grid-cols-3">
-            <Card className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Natural Essence Crafting</span>
-                  <FlaskConical className="h-6 w-6" />
-                </CardTitle>
-                <CardDescription className="text-slate-200">
-                  Track inventory, roll checks, and keep your refinement pipeline humming.
+      <div className="flex flex-col gap-8 compact-gap pb-16">
+        <Card className="shadow-sm">
+          <CardHeader className="mb-0 space-y-2">
+            <CardTitle className="flex items-center justify-between text-2xl font-bold text-slate-900">
+              <span>Natural Essence Crafting</span>
+              <FlaskConical className="h-7 w-7 text-indigo-600" aria-hidden="true" />
+            </CardTitle>
+            <CardDescription className="text-sm text-slate-500">
+              Track inventory, roll checks, and keep your refinement pipeline humming.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-row flex-wrap gap-2 text-xs font-medium text-slate-600">
+            <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700">
+              Session {formatMinutes(state.sessionMinutes)}
+            </Badge>
+            <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
+              Log entries {state.log.length}
+            </Badge>
+            <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
+              Recent rolls {state.rolls.checks.length + state.rolls.salvages.length}
+            </Badge>
+          </CardContent>
+        </Card>
+
+        <div className="grid compact-gap gap-6 lg:grid-cols-[2fr_1fr]">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold text-slate-900">Inventory</CardTitle>
+              <CardDescription className="text-sm text-slate-500">
+                Update your current stock. Crafting actions adjust automatically.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="!grid compact-gap gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {RESOURCES.map((resource) => (
+                <div key={resource} className="flex flex-col gap-1.5">
+                  <Label htmlFor={`inv-${resource}`} className="text-[11px] font-semibold tracking-wide text-slate-600">
+                    {RESOURCE_LABELS[resource]}
+                  </Label>
+                  <Input
+                    id={`inv-${resource}`}
+                    type="number"
+                    min={0}
+                    value={state.inventory[resource]}
+                    onChange={(event) =>
+                      handleInventoryChange(resource, Math.max(0, Number(event.target.value)))
+                    }
+                    className="max-w-[140px]"
+                  />
+                </div>
+              ))}
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={handleUndo}>
+                  <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" /> Undo
+                </Button>
+                <Button type="button" variant="destructive" onClick={handleClear}>
+                  <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Clear
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold text-slate-900">Settings & Rolls</CardTitle>
+              <CardDescription className="text-sm text-slate-500">
+                Configure modifiers, rolling behaviour, and queue manual results.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 compact-gap">
+              <div className="grid compact-gap gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="modifier">Crafting modifier</Label>
+                  <Input
+                    id="modifier"
+                    type="number"
+                    value={modifier}
+                    onChange={(event) =>
+                      setState((prev) => ({
+                        ...prev,
+                        settings: {
+                          ...prev.settings,
+                          modifier: Number(event.target.value) || 0,
+                        },
+                      }))
+                    }
+                    className="max-w-[120px]"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="advantage">Main check mode</Label>
+                  <Select
+                    value={state.settings.advantage}
+                    onValueChange={(value) =>
+                      setState((prev) => ({
+                        ...prev,
+                        settings: {
+                          ...prev.settings,
+                          advantage: value as AdvantageMode,
+                        },
+                      }))
+                    }
+                    disabled={state.settings.rollMode === "manual"}
+                  >
+                    <SelectTrigger id="advantage">
+                      <SelectValue placeholder="Select advantage mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="advantage">Advantage</SelectItem>
+                      <SelectItem value="disadvantage">Disadvantage</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {state.settings.rollMode === "manual" ? (
+                    <p className="text-[11px] text-slate-500">Manual mode always rolls a single d20.</p>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">Auto rolling</p>
+                    <p className="text-[11px] text-slate-500">Toggle manual queues for precise control.</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                    <span>Manual</span>
+                    <Switch
+                      checked={state.settings.rollMode === "auto"}
+                      onCheckedChange={(checked) =>
+                        setState((prev) => ({
+                          ...prev,
+                          settings: {
+                            ...prev.settings,
+                            rollMode: checked ? "auto" : "manual",
+                          },
+                        }))
+                      }
+                      aria-label="Toggle auto rolling"
+                    />
+                    <span>Auto</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">Compact mode</p>
+                    <p className="text-[11px] text-slate-500">Reduces padding and gaps across the interface.</p>
+                  </div>
+                  <Switch
+                    checked={compactMode}
+                    onCheckedChange={(checked) => onToggleCompactMode(checked)}
+                    aria-label="Toggle compact layout"
+                  />
+                </div>
+              </div>
+
+              <div className="grid compact-gap gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="manual-checks">Manual check rolls (comma separated)</Label>
+                  <Input
+                    id="manual-checks"
+                    value={manualCheckText}
+                    onChange={(event) => setManualCheckText(event.target.value)}
+                    onBlur={() => handleManualQueueCommit("check")}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleManualQueueCommit("check");
+                      }
+                    }}
+                    placeholder="e.g. 12, 5, 18"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="manual-salvage">Manual salvage rolls (comma separated)</Label>
+                  <Input
+                    id="manual-salvage"
+                    value={manualSalvageText}
+                    onChange={(event) => setManualSalvageText(event.target.value)}
+                    onBlur={() => handleManualQueueCommit("salvage")}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleManualQueueCommit("salvage");
+                      }
+                    }}
+                    placeholder="e.g. 7, 16"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" onClick={handleSmokeTests}>
+                  <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" /> Smoke tests
+                </Button>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <p>
+                  Recent rolls: {state.rolls.checks.length} main · {state.rolls.salvages.length} salvage.
+                </p>
+                <p>Manual queues fall back to random rolls if they run out mid-batch.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {statusMessage ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-sm">
+            {statusMessage}
+          </div>
+        ) : null}
+
+        <Tabs
+          value={activeTier}
+          onValueChange={(value) => setActiveTier(value as TierKey)}
+          className="flex flex-col gap-5"
+        >
+          <TabsList className="w-full max-w-full flex-wrap justify-start gap-2 bg-white">
+            {TIER_ORDER.map((tier) => (
+              <TabsTrigger key={tier} value={tier}>
+                {tier}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {TIER_ORDER.map((tier) => (
+            <TabsContent key={tier} value={tier} className="mt-5">
+              {renderTierPanel(tier)}
+            </TabsContent>
+          ))}
+        </Tabs>
+
+        <div className="grid compact-gap gap-6 lg:grid-cols-[2fr_1fr]">
+          <div className="grid compact-gap gap-6 md:grid-cols-2">
+            <Card className="shadow-sm">
+              <CardHeader className="sticky top-0 z-10 mb-0 space-y-1 bg-white/95 pb-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
+                <CardTitle className="text-base font-semibold text-slate-900">Recent Checks</CardTitle>
+                <CardDescription className="text-xs text-slate-500">
+                  Latest main roll results with modifiers applied.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                <Badge variant="secondary" className="bg-white/20 text-white">
-                  Session {formatMinutes(state.sessionMinutes)}
-                </Badge>
-                <Badge variant="secondary" className="bg-white/20 text-white">
-                  Log entries {state.log.length}
-                </Badge>
-                <Badge variant="secondary" className="bg-white/20 text-white">
-                  Recent rolls {state.rolls.checks.length + state.rolls.salvages.length}
-                </Badge>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Inventory</CardTitle>
-                <CardDescription>Editable counts. Crafting actions update automatically.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                {RESOURCES.map((resource) => (
-                  <div key={resource} className="space-y-1">
-                    <Label htmlFor={`inv-${resource}`}>{RESOURCE_LABELS[resource]}</Label>
-                    <Input
-                      id={`inv-${resource}`}
-                      type="number"
-                      min={0}
-                      value={state.inventory[resource]}
-                      onChange={(event) =>
-                        handleInventoryChange(resource, Math.max(0, Number(event.target.value)))
-                      }
-                    />
-                  </div>
-                ))}
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <Button type="button" variant="secondary" onClick={handleUndo}>
-                    <RotateCcw className="mr-2 h-4 w-4" /> Undo
-                  </Button>
-                  <Button type="button" variant="destructive" onClick={handleClear}>
-                    <Trash2 className="mr-2 h-4 w-4" /> Clear
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Settings & Rolls</CardTitle>
-                <CardDescription>Configure modifier, rolling mode, and manual queues.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="modifier">Crafting modifier</Label>
-                    <Input
-                      id="modifier"
-                      type="number"
-                      value={modifier}
-                      onChange={(event) =>
-                        setState((prev) => ({
-                          ...prev,
-                          settings: {
-                            ...prev.settings,
-                            modifier: Number(event.target.value) || 0,
-                          },
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white/80 p-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700">Auto rolling</p>
-                      <p className="text-xs text-slate-500">Toggle manual queues for precise control.</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500">Manual</span>
-                      <Switch
-                        checked={state.settings.rollMode === "auto"}
-                        onCheckedChange={(checked) =>
-                          setState((prev) => ({
-                            ...prev,
-                            settings: {
-                              ...prev.settings,
-                              rollMode: checked ? "auto" : "manual",
-                            },
-                          }))
-                        }
-                      />
-                      <span className="text-xs text-slate-500">Auto</span>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="advantage">Main check mode</Label>
-                    <Select
-                      value={state.settings.advantage}
-                      onValueChange={(value) =>
-                        setState((prev) => ({
-                          ...prev,
-                          settings: {
-                            ...prev.settings,
-                            advantage: value as AdvantageMode,
-                          },
-                        }))
-                      }
-                      disabled={state.settings.rollMode === "manual"}
-                    >
-                      <SelectTrigger id="advantage">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="normal">Normal</SelectItem>
-                        <SelectItem value="advantage">Advantage</SelectItem>
-                        <SelectItem value="disadvantage">Disadvantage</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {state.settings.rollMode === "manual" ? (
-                      <p className="text-xs text-slate-500">Manual mode always rolls a single d20.</p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="grid gap-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="manual-checks">Manual check rolls (comma separated)</Label>
-                    <Input
-                      id="manual-checks"
-                      value={manualCheckText}
-                      onChange={(event) => setManualCheckText(event.target.value)}
-                      onBlur={() => handleManualQueueCommit("check")}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          handleManualQueueCommit("check");
-                        }
-                      }}
-                      placeholder="e.g. 12, 5, 18"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="manual-salvage">Manual salvage rolls (comma separated)</Label>
-                    <Input
-                      id="manual-salvage"
-                      value={manualSalvageText}
-                      onChange={(event) => setManualSalvageText(event.target.value)}
-                      onBlur={() => handleManualQueueCommit("salvage")}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          handleManualQueueCommit("salvage");
-                        }
-                      }}
-                      placeholder="e.g. 7, 16"
-                    />
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="secondary" onClick={handleSmokeTests}>
-                    <Sparkles className="mr-2 h-4 w-4" /> Smoke tests
-                  </Button>
-                </div>
-
-                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-sm text-slate-600">
-                  <p>Recent rolls: {state.rolls.checks.length} main · {state.rolls.salvages.length} salvage.</p>
-                  <p>Manual queues auto-fallback to random rolls if they run out mid-batch.</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {statusMessage ? (
-            <div className="rounded-lg border border-emerald-300/60 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              {statusMessage}
-            </div>
-          ) : null}
-
-          <Tabs value={activeTier} onValueChange={(value) => setActiveTier(value as TierKey)}>
-            <TabsList>
-              {TIER_ORDER.map((tier) => (
-                <TabsTrigger key={tier} value={tier}>
-                  {tier}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            {TIER_ORDER.map((tier) => (
-              <TabsContent key={tier} value={tier}>
-                {renderTierPanel(tier)}
-              </TabsContent>
-            ))}
-          </Tabs>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Rolls</CardTitle>
-                <CardDescription>Main checks (left) and salvage rolls (right).</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-semibold text-slate-700">Checks</h4>
-                    <div className="space-y-2 text-sm">
-                      {state.rolls.checks.length === 0 ? (
-                        <p className="text-slate-500">No rolls yet.</p>
-                      ) : (
-                        state.rolls.checks.map((roll) => (
-                          <div key={roll.id} className="rounded-lg border border-slate-200 bg-white/80 p-3 shadow-sm">
-                            <div className="flex items-center justify-between text-xs text-slate-500">
-                              <span>{new Date(roll.timestamp).toLocaleTimeString()}</span>
-                              <span>
-                                {roll.tier} {roll.risk}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex items-center justify-between">
-                              <span className="font-semibold text-slate-700">
-                                d20 {roll.raw} + {roll.modifier} = {roll.total}
-                              </span>
-                              <span className={roll.success ? "text-emerald-600" : "text-rose-600"}>
-                                {roll.success ? "✓" : "✗"}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-500">DC {roll.dc}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-semibold text-slate-700">Salvage</h4>
-                    <div className="space-y-2 text-sm">
-                      {state.rolls.salvages.length === 0 ? (
-                        <p className="text-slate-500">No salvage rolls yet.</p>
-                      ) : (
-                        state.rolls.salvages.map((roll) => (
-                          <div key={roll.id} className="rounded-lg border border-slate-200 bg-white/80 p-3 shadow-sm">
-                            <div className="flex items-center justify-between text-xs text-slate-500">
-                              <span>{new Date(roll.timestamp).toLocaleTimeString()}</span>
-                              <span>
-                                {roll.tier} {roll.risk}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex items-center justify-between">
-                              <span className="font-semibold text-slate-700">
-                                d20 {roll.raw} + {roll.modifier} = {roll.total}
-                              </span>
-                              <span className={roll.success ? "text-emerald-600" : "text-rose-600"}>
-                                {roll.success ? "✓" : "✗"}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-500">DC {roll.dc}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Action Log</CardTitle>
-                <CardDescription>Latest attempts with resource deltas.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                {state.log.length === 0 ? (
-                  <p className="text-slate-500">No crafting actions yet.</p>
+              <CardContent className="max-h-80 overflow-y-auto pr-1 gap-3">
+                {state.rolls.checks.length === 0 ? (
+                  <p className="text-xs text-slate-500">No rolls yet.</p>
                 ) : (
-                  state.log.map((entry) => (
-                    <div key={entry.id} className="rounded-lg border border-slate-200 bg-white/80 p-3 shadow-sm">
-                      <div className="flex items-center justify-between text-xs text-slate-500">
-                        <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
-                        <span>{entry.tier === "system" ? "System" : `${entry.tier} ${entry.risk}`}</span>
+                  state.rolls.checks.map((roll) => (
+                    <div
+                      key={roll.id}
+                      className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+                    >
+                      <div className="flex items-center justify-between text-[11px] text-slate-500">
+                        <span>{new Date(roll.timestamp).toLocaleTimeString()}</span>
+                        <span>
+                          {roll.tier} · {roll.risk}
+                        </span>
                       </div>
-                      <p className="mt-1 text-slate-700">{entry.text}</p>
+                      <div className="flex items-center justify-between font-mono text-sm text-slate-900">
+                        <span>
+                          d20 {roll.raw} + {roll.modifier} = {roll.total}
+                        </span>
+                        <span className={roll.success ? "text-emerald-600" : "text-rose-600"}>
+                          {roll.success ? "✓" : "✗"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">DC {roll.dc}</p>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm">
+              <CardHeader className="sticky top-0 z-10 mb-0 space-y-1 bg-white/95 pb-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
+                <CardTitle className="text-base font-semibold text-slate-900">Recent Salvage</CardTitle>
+                <CardDescription className="text-xs text-slate-500">
+                  Salvage checks from failed attempts.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="max-h-80 overflow-y-auto pr-1 gap-3">
+                {state.rolls.salvages.length === 0 ? (
+                  <p className="text-xs text-slate-500">No salvage rolls yet.</p>
+                ) : (
+                  state.rolls.salvages.map((roll) => (
+                    <div
+                      key={roll.id}
+                      className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+                    >
+                      <div className="flex items-center justify-between text-[11px] text-slate-500">
+                        <span>{new Date(roll.timestamp).toLocaleTimeString()}</span>
+                        <span>
+                          {roll.tier} · {roll.risk}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between font-mono text-sm text-slate-900">
+                        <span>
+                          d20 {roll.raw} + {roll.modifier} = {roll.total}
+                        </span>
+                        <span className={roll.success ? "text-emerald-600" : "text-rose-600"}>
+                          {roll.success ? "✓" : "✗"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">DC {roll.dc}</p>
                     </div>
                   ))
                 )}
               </CardContent>
             </Card>
           </div>
+
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold text-slate-900">Action Log</CardTitle>
+              <CardDescription className="text-sm text-slate-500">
+                Latest attempts with resource deltas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="max-h-80 overflow-y-auto pr-1 text-sm gap-3">
+              {state.log.length === 0 ? (
+                <p className="text-xs text-slate-500">No crafting actions yet.</p>
+              ) : (
+                state.log.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
+                  >
+                    <div className="flex items-center justify-between text-[11px] text-slate-500">
+                      <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
+                      <span>
+                        {entry.tier === "system" ? "System" : `${entry.tier} · ${entry.risk}`}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-700">{entry.text}</p>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
         </div>
-        <DiceOverlay rolls={diceOverlay} />
       </div>
+      <DiceOverlay rolls={diceOverlay} />
     </TooltipProvider>
   );
 }

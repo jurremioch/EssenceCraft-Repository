@@ -31,17 +31,19 @@ export function DiceOverlay({ rolls }: DiceOverlayProps) {
               initial={{ rotateX: -45, rotateY: 45 }}
               animate={{ rotateX: 0, rotateY: 0 }}
               transition={{ type: "spring", stiffness: 150, damping: 16 }}
-              className="relative flex min-w-[120px] flex-col gap-1 rounded-xl border border-white/20 bg-slate-900/90 px-4 py-3 text-white shadow-2xl backdrop-blur"
+              className="relative flex min-w-[140px] flex-col gap-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-xl"
             >
-              <div className="text-xs uppercase tracking-wide text-white/70">{face.label}</div>
-              <div className="text-3xl font-bold leading-none">
-                {face.raw}
-                <span className="ml-1 text-base font-medium text-white/60">d20</span>
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {face.label}
               </div>
-              <div className="text-sm text-white/70">
+              <div className="text-3xl font-bold leading-none text-slate-900">
+                {face.raw}
+                <span className="ml-1 text-base font-medium text-slate-500">d20</span>
+              </div>
+              <div className="text-sm text-slate-600">
                 Total {face.total} vs DC {face.dc}
               </div>
-              <div className={face.success ? "text-emerald-300" : "text-rose-300"}>
+              <div className={face.success ? "text-emerald-600" : "text-rose-600"}>
                 {face.success ? "Success" : "Fail"}
               </div>
             </motion.div>

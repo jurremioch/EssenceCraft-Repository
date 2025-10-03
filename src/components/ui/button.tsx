@@ -8,18 +8,19 @@ export interface ButtonProps
   asChild?: boolean;
 }
 
-const buttonVariants = "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
+const buttonVariants =
+  "inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 disabled:cursor-not-allowed disabled:opacity-60";
 
 export const buttonStyles = {
-  default:
-    "bg-slate-900 text-white hover:bg-slate-900/90 focus-visible:ring-slate-500",
+  default: "bg-indigo-600 text-white hover:bg-indigo-700",
+  primary: "bg-indigo-600 text-white hover:bg-indigo-700",
   secondary:
-    "bg-white text-slate-900 hover:bg-slate-100 focus-visible:ring-slate-400 border border-slate-200",
+    "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
   outline:
-    "border border-slate-200 bg-transparent hover:bg-slate-100 focus-visible:ring-slate-400",
-  ghost: "hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-slate-300",
+    "border border-slate-300 bg-transparent text-slate-700 hover:bg-slate-50",
+  ghost: "text-slate-700 hover:bg-slate-100",
   destructive:
-    "bg-rose-500 text-white hover:bg-rose-500/90 focus-visible:ring-rose-400",
+    "bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-500",
 };
 
 type VariantKey = keyof typeof buttonStyles;
