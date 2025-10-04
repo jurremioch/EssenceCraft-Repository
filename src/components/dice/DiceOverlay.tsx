@@ -1,14 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { Transition } from "framer-motion";
 
-export interface DiceFace {
-  id: string;
-  label: string;
-  raw: number;
-  total: number;
-  dc: number;
-  success: boolean;
-}
+import type { DiceFace } from "@/app/store/craftingStore";
 
 interface DiceOverlayProps {
   rolls: DiceFace[] | null;
