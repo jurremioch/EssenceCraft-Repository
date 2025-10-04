@@ -41,12 +41,12 @@ export function FamilyTabs({ family, inventory, settings, onRunAction }: FamilyT
 
   return (
     <Tabs defaultValue={initialTier} className="w-full">
-      <TabsList className="mb-4 flex w-full flex-wrap gap-2 rounded-xl border border-slate-200/80 bg-white/90 p-1.5 shadow-sm">
+      <TabsList className="mb-4 flex w-full flex-wrap gap-2 bg-slate-100 p-1">
         {TIERS.filter((tier) => grouped.has(tier)).map((tier) => (
           <TabsTrigger
             key={tier}
             value={tier}
-            className="flex-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold uppercase tracking-wide text-slate-500 transition data-[state=active]:bg-slate-900 data-[state=active]:text-white"
+            className="flex-1 whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-slate-900"
           >
             {tier}
           </TabsTrigger>
@@ -54,7 +54,7 @@ export function FamilyTabs({ family, inventory, settings, onRunAction }: FamilyT
       </TabsList>
       {TIERS.filter((tier) => grouped.has(tier)).map((tier) => (
         <TabsContent key={tier} value={tier} className="space-y-4 focus-visible:outline-none">
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             {grouped.get(tier)!.map((action) => (
               <TierPanel
                 key={action.id}

@@ -36,14 +36,14 @@ export function SettingsPanel({ settings, onChange, onUpdateManualQueue }: Setti
   }, [settings.manualSalvageQueue]);
 
   return (
-    <Card className="border-slate-200/70 bg-white/90 shadow-sm">
-      <CardHeader className="pb-3">
+    <Card className="border-slate-200/70 bg-white/60 shadow-sm backdrop-blur">
+      <CardHeader>
         <CardTitle className="text-base font-semibold text-slate-900">Settings</CardTitle>
         <p className="text-sm text-slate-500">Control modifiers, rolling mode, and manual queues.</p>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
-        <div className="grid gap-1.5">
-          <Label className="text-[0.65rem] uppercase tracking-[0.16em] text-slate-500">Crafting modifier</Label>
+        <div className="grid gap-2">
+          <Label className="text-xs uppercase tracking-wide text-slate-500">Crafting modifier</Label>
           <Input
             type="number"
             value={settings.modifier}
@@ -51,8 +51,8 @@ export function SettingsPanel({ settings, onChange, onUpdateManualQueue }: Setti
           />
         </div>
 
-        <div className="grid gap-1.5">
-          <Label className="text-[0.65rem] uppercase tracking-[0.16em] text-slate-500">Check roll mode</Label>
+        <div className="grid gap-2">
+          <Label className="text-xs uppercase tracking-wide text-slate-500">Check roll mode</Label>
           <Select
             value={settings.rollMode}
             onValueChange={(value) => onChange({ rollMode: value as CraftingSettings["rollMode"] })}
@@ -68,7 +68,7 @@ export function SettingsPanel({ settings, onChange, onUpdateManualQueue }: Setti
           </Select>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border border-slate-200/80 bg-slate-50/80 p-3">
+        <div className="flex items-center justify-between rounded-lg border border-slate-200/70 bg-white/70 p-3">
           <div>
             <p className="text-sm font-medium text-slate-800">Automatic rolls</p>
             <p className="text-xs text-slate-500">Toggle off to feed manual d20 results.</p>
@@ -79,7 +79,7 @@ export function SettingsPanel({ settings, onChange, onUpdateManualQueue }: Setti
           />
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border border-slate-200/80 bg-slate-50/80 p-3">
+        <div className="flex items-center justify-between rounded-lg border border-slate-200/70 bg-white/70 p-3">
           <div>
             <p className="text-sm font-medium text-slate-800">Dice overlay</p>
             <p className="text-xs text-slate-500">Show the animated dice results after each attempt.</p>
@@ -91,9 +91,9 @@ export function SettingsPanel({ settings, onChange, onUpdateManualQueue }: Setti
         </div>
 
         {settings.rollResolution === "manual" ? (
-          <div className="space-y-4 rounded-lg border border-slate-200/80 bg-slate-50/80 p-3">
-            <div className="grid gap-1.5">
-              <Label className="text-[0.65rem] uppercase tracking-[0.16em] text-slate-500">Manual check rolls</Label>
+          <div className="space-y-4 rounded-lg border border-slate-200/70 bg-white/70 p-3">
+            <div className="grid gap-2">
+              <Label className="text-xs uppercase tracking-wide text-slate-500">Manual check rolls</Label>
               <Input
                 value={manualCheckText}
                 onChange={(event) => setManualCheckText(event.target.value)}
@@ -101,8 +101,8 @@ export function SettingsPanel({ settings, onChange, onUpdateManualQueue }: Setti
                 placeholder="e.g. 5, 12, 18"
               />
             </div>
-            <div className="grid gap-1.5">
-              <Label className="text-[0.65rem] uppercase tracking-[0.16em] text-slate-500">Manual salvage rolls</Label>
+            <div className="grid gap-2">
+              <Label className="text-xs uppercase tracking-wide text-slate-500">Manual salvage rolls</Label>
               <Input
                 value={manualSalvageText}
                 onChange={(event) => setManualSalvageText(event.target.value)}

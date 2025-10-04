@@ -25,16 +25,16 @@ export function InventoryPanel({
   onClear,
 }: InventoryPanelProps) {
   return (
-    <Card className="border-slate-200/70 bg-white/90 shadow-sm">
-      <CardHeader className="pb-3">
+    <Card className="border-slate-200/70 bg-white/60 shadow-sm backdrop-blur">
+      <CardHeader>
         <CardTitle className="text-base font-semibold text-slate-900">Inventory</CardTitle>
         <p className="text-sm text-slate-500">Track resources for {family.name}.</p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3">
           {family.resources.map((resource) => (
-            <div key={resource} className="grid gap-1.5">
-              <Label className="text-[0.65rem] uppercase tracking-[0.16em] text-slate-500">
+            <div key={resource} className="grid gap-1">
+              <Label className="text-xs font-medium text-slate-600">
                 {family.resourceLabels?.[resource] ?? resource}
               </Label>
               <Input
@@ -50,13 +50,13 @@ export function InventoryPanel({
           ))}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" className="h-8 px-3 text-xs" onClick={onSnapshot}>
+          <Button type="button" variant="outline" onClick={onSnapshot}>
             Snapshot
           </Button>
-          <Button type="button" variant="outline" className="h-8 px-3 text-xs" onClick={onRestore}>
+          <Button type="button" variant="outline" onClick={onRestore}>
             Restore
           </Button>
-          <Button type="button" variant="ghost" className="h-8 px-3 text-xs text-rose-600" onClick={onClear}>
+          <Button type="button" variant="ghost" className="text-rose-600" onClick={onClear}>
             Clear
           </Button>
         </div>

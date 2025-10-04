@@ -27,7 +27,7 @@ export function DiceOverlay({ rolls }: DiceOverlayProps) {
           animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
           exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 20, scale: 0.95 }}
           transition={containerTransition}
-          className="fixed bottom-6 right-6 z-50 flex flex-col gap-3"
+          className="fixed bottom-6 right-6 z-50 flex gap-3"
         >
           {rolls.map((face) => (
             <motion.div
@@ -35,7 +35,7 @@ export function DiceOverlay({ rolls }: DiceOverlayProps) {
               initial={prefersReducedMotion ? { opacity: 0 } : { rotateX: -45, rotateY: 45 }}
               animate={prefersReducedMotion ? { opacity: 1 } : { rotateX: 0, rotateY: 0 }}
               transition={faceTransition}
-              className="relative flex min-w-[160px] flex-col gap-1 rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 text-slate-900 shadow-xl"
+              className="relative flex min-w-[140px] flex-col gap-1 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-slate-900 shadow-xl"
             >
               <div className="text-xs font-semibold text-slate-500">
                 {face.label}

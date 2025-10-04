@@ -15,12 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Separator } from "@/components/ui/separator";
 
 import type { CraftingSettings } from "@/app/store/craftingStore";
 
@@ -29,29 +24,6 @@ const TIER_ORDER: Record<ActionSpec["tier"], number> = {
   T3: 1,
   T4: 2,
   T5: 3,
-};
-
-const TIER_ACCENTS: Record<ActionSpec["tier"], { gradient: string; badge: string; shadow: string }> = {
-  T2: {
-    gradient: "from-emerald-300 via-emerald-400 to-emerald-500",
-    badge: "bg-emerald-500/10 text-emerald-700 ring-1 ring-inset ring-emerald-400/60",
-    shadow: "shadow-[0_0_0_1px_rgba(16,185,129,0.12)]",
-  },
-  T3: {
-    gradient: "from-sky-300 via-sky-400 to-sky-500",
-    badge: "bg-sky-500/10 text-sky-700 ring-1 ring-inset ring-sky-400/60",
-    shadow: "shadow-[0_0_0_1px_rgba(56,189,248,0.12)]",
-  },
-  T4: {
-    gradient: "from-violet-300 via-violet-400 to-violet-500",
-    badge: "bg-violet-500/10 text-violet-700 ring-1 ring-inset ring-violet-400/60",
-    shadow: "shadow-[0_0_0_1px_rgba(139,92,246,0.12)]",
-  },
-  T5: {
-    gradient: "from-amber-300 via-amber-400 to-amber-500",
-    badge: "bg-amber-500/10 text-amber-800 ring-1 ring-inset ring-amber-400/60",
-    shadow: "shadow-[0_0_0_1px_rgba(251,191,36,0.16)]",
-  },
 };
 
 function formatPercent(value: number): string {
@@ -167,42 +139,20 @@ export function TierPanel({ family, action, inventory, settings, onRun }: TierPa
     }
   }, [extraCatalyst, maxCatalyst]);
 
-  const exceededMax = Number.isFinite(maxAttempts) && attempts > maxAttempts;
-  const disableRun = maxAttempts <= 0 || attempts <= 0 || exceededMax;
-  let disableReason: string | null = null;
-  if (maxAttempts <= 0) {
-    disableReason = "Insufficient resources";
-  } else if (attempts <= 0) {
-    disableReason = "Enter at least one attempt";
-  } else if (exceededMax) {
-    disableReason = `Only ${maxAttempts} attempt${maxAttempts === 1 ? "" : "s"} possible`;
-  }
-
-  const accent = TIER_ACCENTS[action.tier];
-  const feasibleBadge = maxAttempts > 0;
+  const disableRun = maxAttempts <= 0 || attempts <= 0;
 
   return (
-    <Card
-      className={`relative h-full overflow-hidden border border-slate-200/70 bg-white/90 ${accent.shadow}`}
-    >
-      <div className={`pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${accent.gradient}`} />
-      <CardHeader className="space-y-2 pb-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <CardTitle className="text-lg font-semibold text-slate-900">{action.name}</CardTitle>
-            <CardDescription className="text-xs uppercase tracking-wide text-slate-500">
-              {family.name}
-            </CardDescription>
-          </div>
-          <Badge className={`whitespace-nowrap text-[0.7rem] font-semibold uppercase ${accent.badge}`}>
-            {action.tier}
-          </Badge>
-        </div>
+    <Card className="h-full border-slate-200/60 bg-white/60 shadow-sm backdrop-blur">
+      <CardHeader>
+        <CardTitle className="text-base font-semibold text-slate-900">{action.name}</CardTitle>
+        <CardDescription className="text-sm text-slate-500">
+          {family.name} · {action.tier}
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4 text-sm text-slate-700">
+      <CardContent className="space-y-5 text-sm text-slate-700">
         {action.risks ? (
-          <div className="grid gap-1.5">
-            <Label className="text-[0.65rem] uppercase tracking-[0.16em] text-slate-500">Risk</Label>
+          <div className="grid gap-2">
+            <Label className="text-xs uppercase tracking-wide text-slate-500">Risk</Label>
             <Select value={risk ? (risk as string) : undefined} onValueChange={(value) => setRisk(value as Risk)}>
               <SelectTrigger>
                 <SelectValue placeholder="Choose risk" />
@@ -219,8 +169,8 @@ export function TierPanel({ family, action, inventory, settings, onRun }: TierPa
         ) : null}
 
         {action.options?.dcReduction && action.options.allowExtraCatalyst ? (
-          <div className="grid gap-1.5">
-            <Label className="text-[0.65rem] uppercase tracking-[0.16em] text-slate-500">
+          <div className="grid gap-2">
+            <Label className="text-xs uppercase tracking-wide text-slate-500">
               Extra {formatResource(action.options.dcReduction.resource, family.resourceLabels)}
             </Label>
             <Input
@@ -239,8 +189,8 @@ export function TierPanel({ family, action, inventory, settings, onRun }: TierPa
           </div>
         ) : null}
 
-        <div className="grid gap-1.5">
-          <Label className="text-[0.65rem] uppercase tracking-[0.16em] text-slate-500">Attempts</Label>
+        <div className="grid gap-2">
+          <Label className="text-xs uppercase tracking-wide text-slate-500">Attempts</Label>
           <div className="flex items-center gap-2">
             <Input
               type="number"
@@ -254,7 +204,6 @@ export function TierPanel({ family, action, inventory, settings, onRun }: TierPa
             <Button
               type="button"
               variant="outline"
-              className="h-8 whitespace-nowrap px-3 text-xs"
               disabled={maxAttempts <= 0 || !Number.isFinite(maxAttempts)}
               onClick={() => setAttempts(Math.max(1, maxAttempts))}
             >
@@ -266,98 +215,45 @@ export function TierPanel({ family, action, inventory, settings, onRun }: TierPa
           ) : null}
         </div>
 
-        <div className="grid gap-3 rounded-lg border border-slate-200/70 bg-slate-50/60 p-3">
-          <div className="flex items-center justify-between text-xs uppercase tracking-[0.16em] text-slate-500">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>Feasibility</span>
-              </TooltipTrigger>
-              <TooltipContent>Calculated from your current inventory for this action.</TooltipContent>
-            </Tooltip>
-            <Badge
-              className={`px-2 py-0.5 text-[0.65rem] font-semibold ${
-                feasibleBadge
-                  ? "bg-emerald-500/15 text-emerald-700 ring-1 ring-inset ring-emerald-400/40"
-                  : "bg-rose-500/10 text-rose-700 ring-1 ring-inset ring-rose-400/50"
-              }`}
-            >
-              {feasibleBadge ? "Ready" : "Blocked"}
-            </Badge>
+        <Separator className="bg-slate-200" />
+
+        <div className="grid gap-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-600">DC</span>
+            <span className="font-semibold text-slate-900">{preview.dc}</span>
           </div>
-          <p className="text-xs text-slate-600">
-            Up to {Number.isFinite(maxAttempts) ? maxAttempts : "∞"} attempt{maxAttempts === 1 ? "" : "s"} possible with
-            current resources.
-          </p>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <div className="flex flex-col">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Check DC</span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Includes any catalyst reductions and selected risk for the main roll.
-                </TooltipContent>
-              </Tooltip>
-              <span className="text-base font-semibold text-slate-900">{preview.dc}</span>
+          <div className="flex items-center justify-between">
+            <span className="text-slate-600">Success chance</span>
+            <span className="font-medium text-slate-900">{formatPercent(successChance)}</span>
+          </div>
+          {preview.io.salvage ? (
+            <div className="flex items-center justify-between text-slate-600">
+              <span>Salvage DC</span>
+              <span>
+                {preview.io.salvage.dc} · {formatPercent(salvageChance ?? 0)} chance
+              </span>
             </div>
-            <div className="flex flex-col text-right">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Success %</span>
-                </TooltipTrigger>
-                <TooltipContent>Based on your crafting modifier and roll mode.</TooltipContent>
-              </Tooltip>
-              <span className="text-base font-semibold text-slate-900">{formatPercent(successChance)}</span>
-            </div>
-            {preview.io.salvage ? (
-              <div className="flex flex-col">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Salvage DC</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Salvage always uses a single d20 without advantage or disadvantage.</TooltipContent>
-                </Tooltip>
-                <span className="text-sm font-medium text-slate-900">
-                  {preview.io.salvage.dc} · {formatPercent(salvageChance ?? 0)}
-                </span>
-              </div>
-            ) : (
-              <div className="flex flex-col text-slate-500">
-                <span className="text-xs font-semibold uppercase tracking-[0.16em]">Salvage</span>
-                <span className="text-sm">N/A</span>
-              </div>
-            )}
-            <div className="flex flex-col text-right">
-              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Time</span>
-              <span className="text-sm font-medium text-slate-900">{preview.timeMinutes} min</span>
-            </div>
-          </dl>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Requirements</span>
-            <span className="text-sm font-medium text-slate-900">
+          ) : null}
+          <div className="flex items-center justify-between text-slate-600">
+            <span>Time per attempt</span>
+            <span>{preview.timeMinutes} minutes</span>
+          </div>
+          <div className="flex flex-col gap-1 text-slate-600">
+            <span>Total requirements</span>
+            <span className="font-medium text-slate-900">
               {formatRequirements(totalRequirements, family.resourceLabels)}
             </span>
           </div>
         </div>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span>
-              <Button
-                type="button"
-                className="mt-2 w-full"
-                disabled={disableRun}
-                aria-disabled={disableRun}
-                onClick={() => onRun({ action, risk, attempts, extraCatalyst })}
-              >
-                Run crafting batch
-              </Button>
-            </span>
-          </TooltipTrigger>
-          {disableRun && disableReason ? (
-            <TooltipContent>{disableReason}</TooltipContent>
-          ) : null}
-        </Tooltip>
+        <Button
+          type="button"
+          className="w-full"
+          disabled={disableRun}
+          onClick={() => onRun({ action, risk, attempts, extraCatalyst })}
+        >
+          Run simulation
+        </Button>
       </CardContent>
     </Card>
   );
