@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { StateStorage } from "zustand/middleware";
@@ -118,6 +119,8 @@ const memoryStorage = (() => {
 const storageCreator = () =>
   typeof window !== "undefined" ? window.localStorage : memoryStorage;
 
+const useClientLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
 export const useNaturalEssenceStore = create<NaturalEssenceCraftingStore>()(
   persist(
     (set, get) => ({
@@ -218,3 +221,20 @@ export const useNaturalEssenceStore = create<NaturalEssenceCraftingStore>()(
 );
 
 export const getDefaultState = createDefaultState;
+
+export function useResetStoreOnMissingPersistedState(): void {
+  useClientLayoutEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const persistedState = window.localStorage.getItem(STORAGE_KEY);
+      if (persistedState === null) {
+        useNaturalEssenceStore.getState().resetState();
+      }
+    } catch {
+      useNaturalEssenceStore.getState().resetState();
+    }
+  }, []);
+}
