@@ -277,7 +277,6 @@ export function NaturalEssenceCraftingApp({
 
     if (feasible <= 0) {
       setStatusMessage("Insufficient resources for that action.");
-      setDiceOverlay(null);
       return;
     }
 
@@ -290,7 +289,8 @@ export function NaturalEssenceCraftingApp({
     const newChecks: RollRecord[] = [];
     const newSalvages: RollRecord[] = [];
     const newLog: ActionLogEntry[] = [];
-    const overlayFaces: DiceFace[] = [];
+    let lastCheckFace: DiceFace | null = null;
+    let lastSalvageFace: DiceFace | null = null;
     const now = new Date();
     let attemptsCompleted = 0;
     let totalMinutes = 0;
@@ -299,6 +299,9 @@ export function NaturalEssenceCraftingApp({
       if (!hasResources(workingInventory, attemptCosts)) {
         break;
       }
+
+      lastCheckFace = null;
+      lastSalvageFace = null;
 
       const before = cloneInventory(workingInventory);
       workingInventory = applyInventoryDelta(workingInventory, scaleDelta(attemptCosts, -1));
@@ -335,6 +338,15 @@ export function NaturalEssenceCraftingApp({
       };
       newChecks.unshift(checkRecord);
 
+      lastCheckFace = {
+        id: checkRecord.id,
+        label: `${tier} ${risk} check`,
+        raw: rawRoll,
+        total,
+        dc,
+        success,
+      };
+
       let salvageInfo = "";
       if (!success && riskRule.salvage) {
         const salvageRoll = settings.rollMode === "manual"
@@ -359,16 +371,14 @@ export function NaturalEssenceCraftingApp({
         };
         newSalvages.unshift(salvageRecord);
 
-        if (attemptsRequested === 1) {
-          overlayFaces.push({
-            id: salvageRecord.id,
-            label: "Salvage",
-            raw: salvageRoll,
-            total: salvageTotal,
-            dc: riskRule.salvage.dc,
-            success: salvageSuccess,
-          });
-        }
+        lastSalvageFace = {
+          id: salvageRecord.id,
+          label: `${tier} ${risk} salvage`,
+          raw: salvageRoll,
+          total: salvageTotal,
+          dc: riskRule.salvage.dc,
+          success: salvageSuccess,
+        };
       }
 
       const after = cloneInventory(workingInventory);
@@ -382,24 +392,12 @@ export function NaturalEssenceCraftingApp({
       };
       newLog.unshift(entry);
 
-      if (attemptsRequested === 1) {
-        overlayFaces.unshift({
-          id: checkRecord.id,
-          label: "Main Check",
-          raw: rawRoll,
-          total,
-          dc,
-          success,
-        });
-      }
-
       attemptsCompleted += 1;
       totalMinutes += riskRule.timeMinutes;
     }
 
     if (attemptsCompleted === 0) {
       setStatusMessage("Ran out of resources before any attempts could begin.");
-      setDiceOverlay(null);
       return;
     }
 
@@ -414,7 +412,10 @@ export function NaturalEssenceCraftingApp({
       minutes: totalMinutes,
     });
 
-    if (attemptsRequested === 1) {
+    if (lastCheckFace) {
+      const overlayFaces = [lastCheckFace, lastSalvageFace].filter(
+        (face): face is DiceFace => Boolean(face),
+      );
       setDiceOverlay(overlayFaces);
     } else {
       setDiceOverlay(null);
