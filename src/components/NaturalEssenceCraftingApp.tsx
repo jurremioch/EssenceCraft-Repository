@@ -32,7 +32,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AdvantageMode } from "@/lib/math";
 import {
-  EMPTY_INVENTORY,
   MIN_DC,
   applyInventoryDelta,
   computeAttemptCost,
@@ -45,7 +44,11 @@ import {
   runSmokeTests,
 } from "@/lib/rules";
 import type { Inventory, RiskLevel, TierKey } from "@/lib/rules";
-import { loadState, saveState } from "@/lib/storage";
+import {
+  type ActionLogEntry,
+  type RollRecord,
+  useNaturalEssenceStore,
+} from "@/app/store";
 import { clampInt, cn, d20, formatMinutes, parseCSVInts } from "@/lib/util";
 
 const RESOURCES: (keyof Inventory)[] = [
@@ -65,66 +68,6 @@ const RESOURCE_LABELS: Record<keyof Inventory, string> = {
   supreme: "T5 Supreme",
   rawAE: "Raw Arcane Essence",
 };
-
-const MAX_ROLL_HISTORY = 12;
-const MAX_LOG_ENTRIES = 120;
-
-type RollMode = "auto" | "manual";
-
-interface Settings {
-  rollMode: RollMode;
-  advantage: AdvantageMode;
-  modifier: number;
-  manualCheckQueue: number[];
-  manualSalvageQueue: number[];
-}
-
-interface RollRecord {
-  id: string;
-  timestamp: string;
-  tier: TierKey;
-  risk: RiskLevel;
-  dc: number;
-  raw: number;
-  modifier: number;
-  total: number;
-  success: boolean;
-}
-
-interface RollsState {
-  checks: RollRecord[];
-  salvages: RollRecord[];
-}
-
-interface ActionLogEntry {
-  id: string;
-  timestamp: string;
-  tier: TierKey | "system";
-  risk?: RiskLevel;
-  text: string;
-}
-
-interface AppState {
-  inventory: Inventory;
-  settings: Settings;
-  log: ActionLogEntry[];
-  sessionMinutes: number;
-  rolls: RollsState;
-}
-
-const createDefaultState = (): AppState => ({
-  inventory: { ...EMPTY_INVENTORY },
-  settings: {
-    rollMode: "auto",
-    advantage: "normal",
-    modifier: 0,
-    manualCheckQueue: [],
-    manualSalvageQueue: [],
-  },
-  log: [],
-  sessionMinutes: 0,
-  rolls: { checks: [], salvages: [] },
-});
 
 const TIER_ORDER: TierKey[] = ["T2", "T3", "T4", "T5"];
 
@@ -228,23 +171,33 @@ export function NaturalEssenceCraftingApp({
   compactMode,
   onToggleCompactMode,
 }: NaturalEssenceCraftingAppProps) {
-  const [state, setState] = useState<AppState>(() => {
-    const defaults = createDefaultState();
-    const stored = loadState(defaults);
-    return {
-      ...defaults,
-      ...stored,
-      inventory: { ...defaults.inventory, ...(stored.inventory ?? {}) },
-      settings: { ...defaults.settings, ...(stored.settings ?? {}) },
-      rolls: {
-        checks: stored.rolls?.checks ?? [],
-        salvages: stored.rolls?.salvages ?? [],
-      },
-      log: stored.log ?? [],
-      sessionMinutes: stored.sessionMinutes ?? 0,
-    };
-  });
-  const [prevInventory, setPrevInventory] = useState<Inventory | null>(null);
+  const inventory = useNaturalEssenceStore((store) => store.inventory);
+  const settings = useNaturalEssenceStore((store) => store.settings);
+  const log = useNaturalEssenceStore((store) => store.log);
+  const rolls = useNaturalEssenceStore((store) => store.rolls);
+  const sessionMinutes = useNaturalEssenceStore((store) => store.sessionMinutes);
+  const statusMessage = useNaturalEssenceStore((store) => store.statusMessage);
+  const setInventoryValue = useNaturalEssenceStore(
+    (store) => store.setInventoryValue,
+  );
+  const snapshotInventory = useNaturalEssenceStore(
+    (store) => store.snapshotInventory,
+  );
+  const restoreInventory = useNaturalEssenceStore((store) => store.restoreInventory);
+  const clearInventory = useNaturalEssenceStore((store) => store.clearInventory);
+  const updateManualQueue = useNaturalEssenceStore(
+    (store) => store.updateManualQueue,
+  );
+  const appendLogEntries = useNaturalEssenceStore(
+    (store) => store.appendLogEntries,
+  );
+  const commitCraftingResult = useNaturalEssenceStore(
+    (store) => store.commitCraftingResult,
+  );
+  const updateSettings = useNaturalEssenceStore((store) => store.updateSettings);
+  const setStatusMessage = useNaturalEssenceStore(
+    (store) => store.setStatusMessage,
+  );
   const [activeTier, setActiveTier] = useState<TierKey>("T2");
   const [attemptCounts, setAttemptCounts] = useState<Record<TierKey, number>>({
     T2: 1,
@@ -260,70 +213,45 @@ export function NaturalEssenceCraftingApp({
   });
   const [t4ExtraRawAE, setT4ExtraRawAE] = useState(0);
   const [diceOverlay, setDiceOverlay] = useState<DiceFace[] | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [manualCheckText, setManualCheckText] = useState<string>("");
   const [manualSalvageText, setManualSalvageText] = useState<string>("");
 
   useEffect(() => {
-    saveState(state);
-  }, [state]);
+    setManualCheckText(settings.manualCheckQueue.join(", "));
+  }, [settings.manualCheckQueue]);
 
   useEffect(() => {
-    setManualCheckText(state.settings.manualCheckQueue.join(", "));
-  }, [state.settings.manualCheckQueue]);
+    setManualSalvageText(settings.manualSalvageQueue.join(", "));
+  }, [settings.manualSalvageQueue]);
 
-  useEffect(() => {
-    setManualSalvageText(state.settings.manualSalvageQueue.join(", "));
-  }, [state.settings.manualSalvageQueue]);
-
-  const modifier = state.settings.modifier;
+  const modifier = settings.modifier;
   const effectiveAdvantage: AdvantageMode =
-    state.settings.rollMode === "auto" ? state.settings.advantage : "normal";
+    settings.rollMode === "auto" ? settings.advantage : "normal";
 
   const handleInventoryChange = (key: keyof Inventory, value: number) => {
-    setState((prev) => ({
-      ...prev,
-      inventory: {
-        ...prev.inventory,
-        [key]: Math.max(0, Math.round(value)),
-      },
-    }));
+    setInventoryValue(key, value);
   };
 
   const handleManualQueueCommit = (type: "check" | "salvage") => {
     const text = type === "check" ? manualCheckText : manualSalvageText;
     const parsed = parseCSVInts(text);
-    setState((prev) => ({
-      ...prev,
-      settings: {
-        ...prev.settings,
-        manualCheckQueue: type === "check" ? parsed : prev.settings.manualCheckQueue,
-        manualSalvageQueue: type === "salvage" ? parsed : prev.settings.manualSalvageQueue,
-      },
-    }));
+    updateManualQueue(type, parsed);
   };
 
   const handleUndo = () => {
-    if (!prevInventory) {
+    const restored = restoreInventory();
+    if (!restored) {
       setStatusMessage("Nothing to undo yet.");
       return;
     }
 
-    setState((prev) => ({
-      ...prev,
-      inventory: cloneInventory(prevInventory),
-    }));
-    setPrevInventory(null);
     setStatusMessage("Inventory restored to previous snapshot.");
   };
 
   const handleClear = () => {
-    setPrevInventory(cloneInventory(state.inventory));
-    setState((prev) => ({
-      ...prev,
-      inventory: { ...EMPTY_INVENTORY },
-    }));
+    clearInventory();
     setStatusMessage("Inventory cleared.");
+    setDiceOverlay(null);
   };
 
   const handleSmokeTests = () => {
@@ -336,10 +264,7 @@ export function NaturalEssenceCraftingApp({
       text,
     }));
 
-    setState((prev) => ({
-      ...prev,
-      log: [...entries, ...prev.log].slice(0, MAX_LOG_ENTRIES),
-    }));
+    appendLogEntries(entries);
     setStatusMessage("Smoke tests appended to the log.");
   };
 
@@ -348,7 +273,7 @@ export function NaturalEssenceCraftingApp({
     const risk = riskSelections[tier];
     const extraRawAE = tier === "T4" ? Math.max(0, t4ExtraRawAE) : 0;
     const attemptCosts = computeAttemptCost(tier, risk, extraRawAE);
-    const feasible = computeMaxAttempts(state.inventory, tier, risk, extraRawAE);
+    const feasible = computeMaxAttempts(inventory, tier, risk, extraRawAE);
 
     if (feasible <= 0) {
       setStatusMessage("Insufficient resources for that action.");
@@ -358,10 +283,10 @@ export function NaturalEssenceCraftingApp({
 
     const riskRule = getRiskRule(tier, risk);
     const { dc } = computeDc(tier, risk, extraRawAE);
-    const manualChecks = [...state.settings.manualCheckQueue];
-    const manualSalvages = [...state.settings.manualSalvageQueue];
-    let workingInventory = cloneInventory(state.inventory);
-    const baseInventory = cloneInventory(state.inventory);
+    const manualChecks = [...settings.manualCheckQueue];
+    const manualSalvages = [...settings.manualSalvageQueue];
+    let workingInventory = cloneInventory(inventory);
+    const baseInventory = cloneInventory(inventory);
     const newChecks: RollRecord[] = [];
     const newSalvages: RollRecord[] = [];
     const newLog: ActionLogEntry[] = [];
@@ -379,7 +304,7 @@ export function NaturalEssenceCraftingApp({
       workingInventory = applyInventoryDelta(workingInventory, scaleDelta(attemptCosts, -1));
 
       let rawRoll = 0;
-      if (state.settings.rollMode === "manual") {
+      if (settings.rollMode === "manual") {
         rawRoll = manualChecks.shift() ?? d20();
       } else {
         const first = d20();
@@ -412,7 +337,7 @@ export function NaturalEssenceCraftingApp({
 
       let salvageInfo = "";
       if (!success && riskRule.salvage) {
-        const salvageRoll = state.settings.rollMode === "manual"
+        const salvageRoll = settings.rollMode === "manual"
           ? manualSalvages.shift() ?? d20()
           : d20();
         const salvageTotal = salvageRoll + modifier;
@@ -478,27 +403,15 @@ export function NaturalEssenceCraftingApp({
       return;
     }
 
-    setPrevInventory(baseInventory);
-    setState((prev) => {
-      const updatedChecks = [...newChecks, ...prev.rolls.checks].slice(0, MAX_ROLL_HISTORY);
-      const updatedSalvages = [...newSalvages, ...prev.rolls.salvages].slice(0, MAX_ROLL_HISTORY);
-      const updatedLog = [...newLog, ...prev.log].slice(0, MAX_LOG_ENTRIES);
-
-      return {
-        ...prev,
-        inventory: workingInventory,
-        settings: {
-          ...prev.settings,
-          manualCheckQueue: manualChecks,
-          manualSalvageQueue: manualSalvages,
-        },
-        rolls: {
-          checks: updatedChecks,
-          salvages: updatedSalvages,
-        },
-        log: updatedLog,
-        sessionMinutes: prev.sessionMinutes + totalMinutes,
-      };
+    snapshotInventory(baseInventory);
+    commitCraftingResult({
+      inventory: workingInventory,
+      checks: newChecks,
+      salvages: newSalvages,
+      logEntries: newLog,
+      manualChecks,
+      manualSalvages,
+      minutes: totalMinutes,
     });
 
     if (attemptsRequested === 1) {
@@ -567,7 +480,7 @@ export function NaturalEssenceCraftingApp({
       effectiveAdvantage,
     );
     const salvageChance = profile.salvageChance;
-    const feasible = computeMaxAttempts(state.inventory, tier, risk, extraRawAE);
+    const feasible = computeMaxAttempts(inventory, tier, risk, extraRawAE);
     const riskRule = getRiskRule(tier, risk);
     const attemptCosts = computeAttemptCost(tier, risk, extraRawAE);
     const totalTime = attempts * riskRule.timeMinutes;
@@ -576,7 +489,7 @@ export function NaturalEssenceCraftingApp({
       const perAttempt = attemptCosts[resource] ?? 0;
       if (!perAttempt) return [];
       const need = perAttempt * attempts;
-      const have = state.inventory[resource] ?? 0;
+      const have = inventory[resource] ?? 0;
       const shortfall = need - have;
       return shortfall > 0 ? [`${shortfall} more ${RESOURCE_LABELS[resource]}`] : [];
     }).join(", ");
@@ -594,7 +507,7 @@ export function NaturalEssenceCraftingApp({
       const perAttempt = attemptCosts[resource];
       if (!perAttempt) return [];
       const need = perAttempt * attempts;
-      const have = state.inventory[resource] ?? 0;
+      const have = inventory[resource] ?? 0;
       const enough = have >= need;
       return [
         <Chip
@@ -918,13 +831,13 @@ export function NaturalEssenceCraftingApp({
             </div>
             <div className="flex flex-wrap gap-2">
               <Chip className="border-slate-200 bg-white text-slate-700" title="Session duration">
-                Session {formatMinutes(state.sessionMinutes)}
+                Session {formatMinutes(sessionMinutes)}
               </Chip>
               <Chip className="border-slate-200 bg-white text-slate-700" title="Log entries recorded">
-                Log {state.log.length}
+                Log {log.length}
               </Chip>
               <Chip className="border-slate-200 bg-white text-slate-700" title="Total recent rolls tracked">
-                Rolls {state.rolls.checks.length + state.rolls.salvages.length}
+                Rolls {rolls.checks.length + rolls.salvages.length}
               </Chip>
             </div>
           </div>
@@ -952,7 +865,7 @@ export function NaturalEssenceCraftingApp({
                       id={`inv-${resource}`}
                       type="number"
                       min={0}
-                      value={state.inventory[resource]}
+                      value={inventory[resource]}
                       onChange={(event) =>
                         handleInventoryChange(resource, Math.max(0, Number(event.target.value)))
                       }
@@ -998,13 +911,9 @@ export function NaturalEssenceCraftingApp({
                     type="number"
                     value={modifier}
                     onChange={(event) =>
-                      setState((prev) => ({
-                        ...prev,
-                        settings: {
-                          ...prev.settings,
-                          modifier: Number(event.target.value) || 0,
-                        },
-                      }))
+                      updateSettings({
+                        modifier: Number(event.target.value) || 0,
+                      })
                     }
                     className="h-9 w-24 focus-visible:ring-2 focus-visible:ring-indigo-500"
                   />
@@ -1012,17 +921,13 @@ export function NaturalEssenceCraftingApp({
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="advantage">Main check mode</Label>
                   <Select
-                    value={state.settings.advantage}
+                    value={settings.advantage}
                     onValueChange={(value) =>
-                      setState((prev) => ({
-                        ...prev,
-                        settings: {
-                          ...prev.settings,
-                          advantage: value as AdvantageMode,
-                        },
-                      }))
+                      updateSettings({
+                        advantage: value as AdvantageMode,
+                      })
                     }
-                    disabled={state.settings.rollMode === "manual"}
+                    disabled={settings.rollMode === "manual"}
                   >
                     <SelectTrigger id="advantage" className="h-9">
                       <SelectValue placeholder="Select advantage mode" />
@@ -1033,7 +938,7 @@ export function NaturalEssenceCraftingApp({
                       <SelectItem value="disadvantage">Disadvantage</SelectItem>
                     </SelectContent>
                   </Select>
-                  {state.settings.rollMode === "manual" ? (
+                  {settings.rollMode === "manual" ? (
                     <p className="text-[11px] text-slate-500">Manual mode always rolls a single d20.</p>
                   ) : null}
                 </div>
@@ -1050,15 +955,9 @@ export function NaturalEssenceCraftingApp({
                       <span>Manual</span>
                       <Switch
                         aria-label="Toggle auto rolling"
-                        checked={state.settings.rollMode === "auto"}
+                        checked={settings.rollMode === "auto"}
                         onCheckedChange={(checked) =>
-                          setState((prev) => ({
-                            ...prev,
-                            settings: {
-                              ...prev.settings,
-                              rollMode: checked ? "auto" : "manual",
-                            },
-                          }))
+                          updateSettings({ rollMode: checked ? "auto" : "manual" })
                         }
                       />
                       <span>Auto</span>
@@ -1131,7 +1030,7 @@ export function NaturalEssenceCraftingApp({
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-xs text-slate-600">
                 <p>
-                  Recent rolls: {state.rolls.checks.length} main · {state.rolls.salvages.length} salvage.
+                  Recent rolls: {rolls.checks.length} main · {rolls.salvages.length} salvage.
                 </p>
                 <p>Manual queues fall back to random rolls if they run out mid-batch.</p>
               </div>
@@ -1179,10 +1078,10 @@ export function NaturalEssenceCraftingApp({
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-1">
-                {state.rolls.checks.length === 0 ? (
+                {rolls.checks.length === 0 ? (
                   <p className="text-xs text-slate-500">No rolls yet.</p>
                 ) : (
-                  state.rolls.checks.map((roll) => (
+                  rolls.checks.map((roll) => (
                     <div
                       key={roll.id}
                       className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
@@ -1216,10 +1115,10 @@ export function NaturalEssenceCraftingApp({
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-1">
-                {state.rolls.salvages.length === 0 ? (
+                {rolls.salvages.length === 0 ? (
                   <p className="text-xs text-slate-500">No salvage rolls yet.</p>
                 ) : (
-                  state.rolls.salvages.map((roll) => (
+                  rolls.salvages.map((roll) => (
                     <div
                       key={roll.id}
                       className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
@@ -1254,10 +1153,10 @@ export function NaturalEssenceCraftingApp({
               </CardDescription>
             </CardHeader>
             <CardContent className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-1 text-sm">
-              {state.log.length === 0 ? (
+              {log.length === 0 ? (
                 <p className="text-xs text-slate-500">No crafting actions yet.</p>
               ) : (
-                state.log.map((entry) => (
+                log.map((entry) => (
                   <div
                     key={entry.id}
                     className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
