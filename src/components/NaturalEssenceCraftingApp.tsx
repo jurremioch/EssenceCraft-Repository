@@ -32,39 +32,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AdvantageMode } from "@/lib/math";
 import {
-  EMPTY_INVENTORY,
-  MIN_DC,
   applyInventoryDelta,
   computeAttemptCost,
   computeDc,
   computeMaxAttempts,
   computeSuccessProfile,
+  createEmptyInventory,
+  getActiveFamily,
+  getMinimumDc,
+  getResourceDefinitions,
+  getRiskProfiles,
   getRiskRule,
   getSupportedRisks,
+  getTierOrder,
   getTierRule,
   runSmokeTests,
 } from "@/lib/rules";
 import type { Inventory, RiskLevel, TierKey } from "@/lib/rules";
 import { loadState, saveState } from "@/lib/storage";
 import { clampInt, cn, d20, formatMinutes, parseCSVInts } from "@/lib/util";
-
-const RESOURCES: (keyof Inventory)[] = [
-  "raw",
-  "fine",
-  "fused",
-  "superior",
-  "supreme",
-  "rawAE",
-];
-
-const RESOURCE_LABELS: Record<keyof Inventory, string> = {
-  raw: "T1 Raw",
-  fine: "T2 Fine",
-  fused: "T3 Fused",
-  superior: "T4 Superior",
-  supreme: "T5 Supreme",
-  rawAE: "Raw Arcane Essence",
-};
 
 const MAX_ROLL_HISTORY = 12;
 const MAX_LOG_ENTRIES = 120;
@@ -113,7 +99,7 @@ interface AppState {
 }
 
 const createDefaultState = (): AppState => ({
-  inventory: { ...EMPTY_INVENTORY },
+  inventory: createEmptyInventory(),
   settings: {
     rollMode: "auto",
     advantage: "normal",
@@ -125,15 +111,6 @@ const createDefaultState = (): AppState => ({
   sessionMinutes: 0,
   rolls: { checks: [], salvages: [] },
 });
-
-const TIER_ORDER: TierKey[] = ["T2", "T3", "T4", "T5"];
-
-const TIER_GRADIENTS: Record<TierKey, string> = {
-  T2: "from-emerald-400 to-emerald-600",
-  T3: "from-sky-400 to-sky-600",
-  T4: "from-violet-400 to-violet-600",
-  T5: "from-amber-400 to-amber-600",
-};
 
 const focusRing =
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2";
@@ -176,24 +153,36 @@ function hasResources(inventory: Inventory, costs: Partial<Inventory>): boolean 
   });
 }
 
-function diffInventory(before: Inventory, after: Inventory): Partial<Inventory> {
+function diffInventory(
+  before: Inventory,
+  after: Inventory,
+  resourceKeys: string[],
+): Partial<Inventory> {
   const delta: Partial<Inventory> = {};
-  for (const key of RESOURCES) {
-    const change = after[key] - before[key];
+  for (const key of resourceKeys) {
+    const beforeValue = before[key as keyof Inventory] ?? 0;
+    const afterValue = after[key as keyof Inventory] ?? 0;
+    const change = afterValue - beforeValue;
     if (change !== 0) {
-      delta[key] = change;
+      delta[key as keyof Inventory] = change;
     }
   }
   return delta;
 }
 
-function formatDelta(delta: Partial<Inventory>): string {
+function formatDelta(
+  delta: Partial<Inventory>,
+  resourceKeys: string[],
+  labels: Record<string, string>,
+): string {
+  const orderedKeys = Array.from(new Set([...resourceKeys, ...Object.keys(delta)]));
   const parts: string[] = [];
-  for (const key of RESOURCES) {
-    const amount = delta[key];
+  for (const key of orderedKeys) {
+    const amount = delta[key as keyof Inventory];
     if (!amount) continue;
     const sign = amount > 0 ? "+" : "";
-    parts.push(`${sign}${amount} ${RESOURCE_LABELS[key]}`);
+    const label = labels[key] ?? key;
+    parts.push(`${sign}${amount} ${label}`);
   }
   return parts.length > 0 ? parts.join(", ") : "no change";
 }
@@ -204,10 +193,9 @@ function cloneInventory(inventory: Inventory): Inventory {
 
 function scaleDelta(delta: Partial<Inventory>, factor: number): Partial<Inventory> {
   const scaled: Partial<Inventory> = {};
-  for (const key of RESOURCES) {
-    const value = delta[key];
+  for (const [key, value] of Object.entries(delta)) {
     if (!value) continue;
-    scaled[key] = value * factor;
+    scaled[key as keyof Inventory] = (value as number) * factor;
   }
   return scaled;
 }
@@ -215,10 +203,10 @@ function scaleDelta(delta: Partial<Inventory>, factor: number): Partial<Inventor
 function mergeDeltas(...deltas: Partial<Inventory>[]): Partial<Inventory> {
   const result: Partial<Inventory> = {};
   for (const delta of deltas) {
-    for (const key of RESOURCES) {
-      const value = delta[key];
+    for (const [key, value] of Object.entries(delta)) {
       if (!value) continue;
-      result[key] = (result[key] ?? 0) + value;
+      const typedKey = key as keyof Inventory;
+      result[typedKey] = (result[typedKey] ?? 0) + (value as number);
     }
   }
   return result;
@@ -228,6 +216,26 @@ export function NaturalEssenceCraftingApp({
   compactMode,
   onToggleCompactMode,
 }: NaturalEssenceCraftingAppProps) {
+  const family = getActiveFamily();
+  const resourceDefinitions = getResourceDefinitions();
+  const resourceKeys = resourceDefinitions.map((resource) => resource.key);
+  const resourceLabels = Object.fromEntries(
+    resourceDefinitions.map((resource) => [resource.key, resource.label]),
+  ) as Record<string, string>;
+  const tierOrder = getTierOrder();
+  const riskProfiles = getRiskProfiles();
+  const riskLabels = Object.fromEntries(riskProfiles.map((risk) => [risk.key, risk.label])) as Record<
+    string,
+    string
+  >;
+  const minimumDc = getMinimumDc();
+
+  const supportedRisksByTier = new Map<TierKey, RiskLevel[]>(
+    tierOrder.map((tier) => [tier, getSupportedRisks(tier)]),
+  );
+  const firstTier = tierOrder[0] ?? (family.tiers[0]?.key as TierKey);
+  const fallbackRisk = (riskProfiles[0]?.key ?? "standard") as RiskLevel;
+
   const [state, setState] = useState<AppState>(() => {
     const defaults = createDefaultState();
     const stored = loadState(defaults);
@@ -245,20 +253,30 @@ export function NaturalEssenceCraftingApp({
     };
   });
   const [prevInventory, setPrevInventory] = useState<Inventory | null>(null);
-  const [activeTier, setActiveTier] = useState<TierKey>("T2");
-  const [attemptCounts, setAttemptCounts] = useState<Record<TierKey, number>>({
-    T2: 1,
-    T3: 1,
-    T4: 1,
-    T5: 1,
+  const [activeTier, setActiveTier] = useState<TierKey>(firstTier ?? ("" as TierKey));
+  const [attemptCounts, setAttemptCounts] = useState<Record<TierKey, number>>(() => {
+    const counts: Record<string, number> = {};
+    for (const tier of tierOrder) {
+      counts[tier] = 1;
+    }
+    return counts as Record<TierKey, number>;
   });
-  const [riskSelections, setRiskSelections] = useState<Record<TierKey, RiskLevel>>({
-    T2: "standard",
-    T3: "standard",
-    T4: "standard",
-    T5: "standard",
+  const [riskSelections, setRiskSelections] = useState<Record<TierKey, RiskLevel>>(() => {
+    const selections: Record<string, RiskLevel> = {};
+    for (const tier of tierOrder) {
+      const available = supportedRisksByTier.get(tier) ?? [];
+      const defaultRisk = available[0] ?? (getTierRule(tier).risks[0]?.risk as RiskLevel) ?? fallbackRisk;
+      selections[tier] = defaultRisk;
+    }
+    return selections as Record<TierKey, RiskLevel>;
   });
-  const [t4ExtraRawAE, setT4ExtraRawAE] = useState(0);
+  const [extraResources, setExtraResources] = useState<Record<TierKey, number>>(() => {
+    const extras: Record<string, number> = {};
+    for (const tier of tierOrder) {
+      extras[tier] = 0;
+    }
+    return extras as Record<TierKey, number>;
+  });
   const [diceOverlay, setDiceOverlay] = useState<DiceFace[] | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [manualCheckText, setManualCheckText] = useState<string>("");
@@ -321,7 +339,7 @@ export function NaturalEssenceCraftingApp({
     setPrevInventory(cloneInventory(state.inventory));
     setState((prev) => ({
       ...prev,
-      inventory: { ...EMPTY_INVENTORY },
+      inventory: createEmptyInventory(),
     }));
     setStatusMessage("Inventory cleared.");
   };
@@ -343,12 +361,17 @@ export function NaturalEssenceCraftingApp({
     setStatusMessage("Smoke tests appended to the log.");
   };
 
+
+
   const runCrafting = (tier: TierKey) => {
     const attemptsRequested = Math.max(1, attemptCounts[tier] ?? 1);
     const risk = riskSelections[tier];
-    const extraRawAE = tier === "T4" ? Math.max(0, t4ExtraRawAE) : 0;
-    const attemptCosts = computeAttemptCost(tier, risk, extraRawAE);
-    const feasible = computeMaxAttempts(state.inventory, tier, risk, extraRawAE);
+    const tierRule = getTierRule(tier);
+    const extraResourceAmount = tierRule.dcReduction
+      ? Math.max(0, extraResources[tier] ?? 0)
+      : 0;
+    const attemptCosts = computeAttemptCost(tier, risk, extraResourceAmount);
+    const feasible = computeMaxAttempts(state.inventory, tier, risk, extraResourceAmount);
 
     if (feasible <= 0) {
       setStatusMessage("Insufficient resources for that action.");
@@ -357,7 +380,7 @@ export function NaturalEssenceCraftingApp({
     }
 
     const riskRule = getRiskRule(tier, risk);
-    const { dc } = computeDc(tier, risk, extraRawAE);
+    const { dc } = computeDc(tier, risk, extraResourceAmount);
     const manualChecks = [...state.settings.manualCheckQueue];
     const manualSalvages = [...state.settings.manualSalvageQueue];
     let workingInventory = cloneInventory(state.inventory);
@@ -394,7 +417,7 @@ export function NaturalEssenceCraftingApp({
       const success = total >= dc;
 
       if (success) {
-        workingInventory = applyInventoryDelta(workingInventory, getTierRule(tier).success);
+        workingInventory = applyInventoryDelta(workingInventory, tierRule.success);
       }
 
       const checkRecord: RollRecord = {
@@ -447,13 +470,15 @@ export function NaturalEssenceCraftingApp({
       }
 
       const after = cloneInventory(workingInventory);
-      const delta = diffInventory(before, after);
+      const delta = diffInventory(before, after, resourceKeys);
       const entry: ActionLogEntry = {
         id: `${now.getTime()}-${tier}-${i}`,
         timestamp: now.toISOString(),
         tier,
         risk,
-        text: `${tier} ${risk} ${success ? "success" : "failure"} (${total} vs DC ${dc}) — ${formatDelta(delta)}${salvageInfo ? `. ${salvageInfo}` : ""}`,
+        text: `${tier} ${risk} ${success ? "success" : "failure"} (${total} vs DC ${dc}) — ${formatDelta(delta, resourceKeys, resourceLabels)}${salvageInfo
+          ? `. ${salvageInfo}`
+          : ""}`,
       };
       newLog.unshift(entry);
 
@@ -517,11 +542,11 @@ export function NaturalEssenceCraftingApp({
   const renderEvChips = (
     tier: TierKey,
     risk: RiskLevel,
-    extraRawAE: number,
+    extraResource: number,
     successChance: number,
     salvageChance: number | undefined,
   ) => {
-    const costs = computeAttemptCost(tier, risk, extraRawAE);
+    const costs = computeAttemptCost(tier, risk, extraResource);
     const successGain = getTierRule(tier).success;
     const salvageGain = getRiskRule(tier, risk).salvage?.returns ?? {};
 
@@ -539,16 +564,18 @@ export function NaturalEssenceCraftingApp({
       scaleDelta(costDelta, plainFail),
     );
 
-    const chips = RESOURCES.filter((key) => (expected[key] ?? 0) !== 0).map((key) => {
-      const value = expected[key] ?? 0;
-      const sign = value > 0 ? "+" : "";
-      return (
-        <Chip key={key} ok={value >= 0}>
-          {sign}
-          {value.toFixed(2)} {RESOURCE_LABELS[key]}
-        </Chip>
-      );
-    });
+    const chips = resourceKeys
+      .filter((key) => (expected[key as keyof Inventory] ?? 0) !== 0)
+      .map((key) => {
+        const value = expected[key as keyof Inventory] ?? 0;
+        const sign = value > 0 ? "+" : "";
+        return (
+          <Chip key={key} ok={value >= 0}>
+            {sign}
+            {value.toFixed(2)} {resourceLabels[key] ?? key}
+          </Chip>
+        );
+      });
 
     return chips.length > 0 ? chips : <span className="text-xs text-slate-500">No net change</span>;
   };
@@ -557,29 +584,38 @@ export function NaturalEssenceCraftingApp({
     const rule = getTierRule(tier);
     const risk = riskSelections[tier];
     const attempts = Math.max(1, attemptCounts[tier]);
-    const extraRawAE = tier === "T4" ? Math.max(0, t4ExtraRawAE) : 0;
-    const { dc, wastedExtra } = computeDc(tier, risk, extraRawAE);
+    const extraResource = rule.dcReduction ? Math.max(0, extraResources[tier] ?? 0) : 0;
+    const { dc, wastedExtra, reductionResource } = computeDc(tier, risk, extraResource);
     const profile = computeSuccessProfile(
       tier,
       risk,
-      extraRawAE,
+      extraResource,
       modifier,
       effectiveAdvantage,
     );
     const salvageChance = profile.salvageChance;
-    const feasible = computeMaxAttempts(state.inventory, tier, risk, extraRawAE);
+    const feasible = computeMaxAttempts(state.inventory, tier, risk, extraResource);
     const riskRule = getRiskRule(tier, risk);
-    const attemptCosts = computeAttemptCost(tier, risk, extraRawAE);
+    const attemptCosts = computeAttemptCost(tier, risk, extraResource);
     const totalTime = attempts * riskRule.timeMinutes;
+    const reductionLabel = reductionResource
+      ? resourceLabels[reductionResource] ?? reductionResource
+      : null;
+    const extraResourceLabel = rule.dcReduction
+      ? resourceLabels[rule.dcReduction.resource] ?? rule.dcReduction.resource
+      : "";
 
-    const missingResources = RESOURCES.flatMap((resource) => {
-      const perAttempt = attemptCosts[resource] ?? 0;
-      if (!perAttempt) return [];
-      const need = perAttempt * attempts;
-      const have = state.inventory[resource] ?? 0;
-      const shortfall = need - have;
-      return shortfall > 0 ? [`${shortfall} more ${RESOURCE_LABELS[resource]}`] : [];
-    }).join(", ");
+    const missingResources = resourceKeys
+      .flatMap((resource) => {
+        const perAttempt = attemptCosts[resource as keyof Inventory] ?? 0;
+        if (!perAttempt) return [];
+        const need = perAttempt * attempts;
+        const have = state.inventory[resource as keyof Inventory] ?? 0;
+        const shortfall = need - have;
+        const label = resourceLabels[resource] ?? resource;
+        return shortfall > 0 ? [`${shortfall} more ${label}`] : [];
+      })
+      .join(", ");
 
     let disabledReason: string | null = null;
     if (attempts < 1) {
@@ -590,58 +626,64 @@ export function NaturalEssenceCraftingApp({
       disabledReason = missingResources || "Reduce attempts or add resources.";
     }
 
-    const requirementChips = RESOURCES.flatMap((resource) => {
-      const perAttempt = attemptCosts[resource];
+    const requirementChips = resourceKeys.flatMap((resource) => {
+      const perAttempt = attemptCosts[resource as keyof Inventory];
       if (!perAttempt) return [];
       const need = perAttempt * attempts;
-      const have = state.inventory[resource] ?? 0;
+      const have = state.inventory[resource as keyof Inventory] ?? 0;
       const enough = have >= need;
+      const label = resourceLabels[resource] ?? resource;
       return [
         <Chip
           key={resource}
           ok={enough}
-          title={`Need ${need} ${RESOURCE_LABELS[resource]} (have ${have}) for this batch`}
+          title={`Need ${need} ${label} (have ${have}) for this batch`}
         >
-          Need {need} {RESOURCE_LABELS[resource]}
+          Need {need} {label}
         </Chip>,
       ];
     });
 
-    const consumesPerAttempt = RESOURCES.flatMap((resource) => {
-      const value = attemptCosts[resource];
+    const consumesPerAttempt = resourceKeys.flatMap((resource) => {
+      const value = attemptCosts[resource as keyof Inventory];
       if (!value) return [];
+      const label = resourceLabels[resource] ?? resource;
       return [
         <Chip
           key={`consume-${resource}`}
           ok={false}
           className="flex items-center gap-1"
-          title={`Consumes ${value} ${RESOURCE_LABELS[resource]} per attempt`}
+          title={`Consumes ${value} ${label} per attempt`}
         >
-          <PackageMinus className="h-3 w-3" aria-hidden="true" />-{value} {RESOURCE_LABELS[resource]}
+          <PackageMinus className="h-3 w-3" aria-hidden="true" />-{value} {label}
         </Chip>,
       ];
     });
 
-    const producesOnSuccess = RESOURCES.flatMap((resource) => {
-      const value = rule.success[resource];
+    const producesOnSuccess = resourceKeys.flatMap((resource) => {
+      const value = rule.success[resource as keyof Inventory];
       if (!value) return [];
+      const label = resourceLabels[resource] ?? resource;
       return [
         <Chip
           key={`produce-${resource}`}
           ok
           className="flex items-center gap-1"
-          title={`On success gain ${value} ${RESOURCE_LABELS[resource]}`}
+          title={`On success gain ${value} ${label}`}
         >
-          <PackagePlus className="h-3 w-3" aria-hidden="true" />+{value} {RESOURCE_LABELS[resource]}
+          <PackagePlus className="h-3 w-3" aria-hidden="true" />+{value} {label}
         </Chip>,
       ];
     });
 
-    const consumptionSummary = RESOURCES.flatMap((resource) => {
-      const value = attemptCosts[resource];
-      if (!value) return [];
-      return [`${value} ${RESOURCE_LABELS[resource]}`];
-    }).join(", ");
+    const consumptionSummary = resourceKeys
+      .flatMap((resource) => {
+        const value = attemptCosts[resource as keyof Inventory];
+        if (!value) return [];
+        const label = resourceLabels[resource] ?? resource;
+        return [`${value} ${label}`];
+      })
+      .join(", ");
 
     const successPct = Math.round(profile.successChance * 100);
     const salvagePct =
@@ -656,16 +698,16 @@ export function NaturalEssenceCraftingApp({
         <CardHeader className="space-y-1">
           <CardTitle className="text-lg font-semibold text-slate-900">
             <span
-              className={`bg-gradient-to-r ${TIER_GRADIENTS[tier]} bg-clip-text text-transparent`}
+              className={`bg-gradient-to-r ${rule.gradient} bg-clip-text text-transparent`}
             >
               {rule.subtitle}
             </span>
           </CardTitle>
           <CardDescription className="text-[11px] text-slate-500">
             {riskRule.timeMinutes} minutes per attempt · DC {dc}
-            {tier === "T4" && wastedExtra > 0 ? (
+            {reductionLabel && wastedExtra > 0 ? (
               <span className="ml-1 text-amber-600">
-                {wastedExtra} RawAE wasted beyond DC {MIN_DC}
+                {wastedExtra} {reductionLabel} wasted beyond DC {rule.dcReduction?.minDc ?? minimumDc}
               </span>
             ) : null}
           </CardDescription>
@@ -687,7 +729,7 @@ export function NaturalEssenceCraftingApp({
                   <SelectContent>
                     {getSupportedRisks(tier).map((option) => (
                       <SelectItem key={option} value={option}>
-                        {option.charAt(0).toUpperCase() + option.slice(1)}
+                        {riskLabels[option] ?? option.charAt(0).toUpperCase() + option.slice(1)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -757,40 +799,55 @@ export function NaturalEssenceCraftingApp({
                 </div>
               </div>
 
-              {tier === "T4" ? (
+              {rule.dcReduction ? (
                 <div className="space-y-1">
-                  <Label htmlFor="t4-extra">Extra RawAE per attempt</Label>
+                  <Label htmlFor={`${tier}-extra`}>
+                    Extra {extraResourceLabel} per attempt
+                  </Label>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       type="button"
                       variant="outline"
-                      aria-label="Decrease extra RawAE"
+                      aria-label={`Decrease extra ${extraResourceLabel}`}
                       className={cn(focusRing, "h-9 w-9 p-0")}
-                      onClick={() => setT4ExtraRawAE((prev) => Math.max(0, prev - 1))}
+                      onClick={() =>
+                        setExtraResources((prev) => ({
+                          ...prev,
+                          [tier]: Math.max(0, (prev[tier] ?? 0) - 1),
+                        }))
+                      }
                     >
                       <Minus className="h-4 w-4" aria-hidden="true" />
                     </Button>
                     <Input
-                      id="t4-extra"
+                      id={`${tier}-extra`}
                       type="number"
                       min={0}
-                      value={t4ExtraRawAE}
+                      value={extraResource}
                       onChange={(event) =>
-                        setT4ExtraRawAE(Math.max(0, Math.round(Number(event.target.value))))
+                        setExtraResources((prev) => ({
+                          ...prev,
+                          [tier]: Math.max(0, Math.round(Number(event.target.value))),
+                        }))
                       }
                       className="h-9 w-24 text-center focus-visible:ring-2 focus-visible:ring-indigo-500"
                     />
                     <Button
                       type="button"
                       variant="outline"
-                      aria-label="Increase extra RawAE"
+                      aria-label={`Increase extra ${extraResourceLabel}`}
                       className={cn(focusRing, "h-9 w-9 p-0")}
-                      onClick={() => setT4ExtraRawAE((prev) => prev + 1)}
+                      onClick={() =>
+                        setExtraResources((prev) => ({
+                          ...prev,
+                          [tier]: Math.max(0, (prev[tier] ?? 0) + 1),
+                        }))
+                      }
                     >
                       <Plus className="h-4 w-4" aria-hidden="true" />
                     </Button>
                     <p className="text-[11px] text-slate-500">
-                      Lowers DC by 4 each (minimum {MIN_DC}).
+                      Lowers DC by {rule.dcReduction.perUnit} each (minimum {rule.dcReduction.minDc}).
                     </p>
                   </div>
                 </div>
@@ -896,7 +953,7 @@ export function NaturalEssenceCraftingApp({
                   </Tooltip>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {renderEvChips(tier, risk, extraRawAE, profile.successChance, salvageChance)}
+                  {renderEvChips(tier, risk, extraResource, profile.successChance, salvageChance)}
                 </div>
               </div>
             </div>
@@ -914,7 +971,7 @@ export function NaturalEssenceCraftingApp({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <FlaskConical className="h-7 w-7 text-indigo-600" aria-hidden="true" />
-              <h1 className="text-2xl font-semibold text-slate-900">Natural essence crafting</h1>
+              <h1 className="text-2xl font-semibold text-slate-900">{family.label}</h1>
             </div>
             <div className="flex flex-wrap gap-2">
               <Chip className="border-slate-200 bg-white text-slate-700" title="Session duration">
@@ -929,7 +986,7 @@ export function NaturalEssenceCraftingApp({
             </div>
           </div>
           <p className="text-sm text-slate-600">
-            Track inventory, roll checks, and keep your refinement pipeline humming.
+            {family.description ?? "Track inventory, roll checks, and keep your refinement pipeline humming."}
           </p>
         </header>
 
@@ -943,18 +1000,21 @@ export function NaturalEssenceCraftingApp({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {RESOURCES.map((resource) => (
+                {resourceKeys.map((resource) => (
                   <div key={resource} className="flex items-center justify-between gap-3">
                     <Label htmlFor={`inv-${resource}`} className="text-sm font-medium text-slate-600">
-                      {RESOURCE_LABELS[resource]}
+                      {resourceLabels[resource] ?? resource}
                     </Label>
                     <Input
                       id={`inv-${resource}`}
                       type="number"
                       min={0}
-                      value={state.inventory[resource]}
+                      value={state.inventory[resource as keyof Inventory] ?? 0}
                       onChange={(event) =>
-                        handleInventoryChange(resource, Math.max(0, Number(event.target.value)))
+                        handleInventoryChange(
+                          resource as keyof Inventory,
+                          Math.max(0, Number(event.target.value)),
+                        )
                       }
                       className="h-9 w-24 text-right focus-visible:ring-2 focus-visible:ring-indigo-500"
                     />
@@ -1151,8 +1211,8 @@ export function NaturalEssenceCraftingApp({
           onValueChange={(value) => setActiveTier(value as TierKey)}
           className="flex flex-col gap-4"
         >
-          <TabsList className="grid grid-cols-4 sticky top-0 z-10 border-b border-slate-200 bg-slate-50/90 backdrop-blur">
-            {TIER_ORDER.map((tier) => (
+          <TabsList className="grid auto-cols-fr grid-flow-col sticky top-0 z-10 border-b border-slate-200 bg-slate-50/90 backdrop-blur">
+            {tierOrder.map((tier) => (
               <TabsTrigger
                 key={tier}
                 value={tier}
@@ -1162,7 +1222,7 @@ export function NaturalEssenceCraftingApp({
               </TabsTrigger>
             ))}
           </TabsList>
-          {TIER_ORDER.map((tier) => (
+          {tierOrder.map((tier) => (
             <TabsContent key={tier} value={tier} className="pt-4">
               {renderTierPanel(tier)}
             </TabsContent>

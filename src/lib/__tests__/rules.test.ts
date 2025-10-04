@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  MIN_DC,
   computeDc,
   computeMaxAttempts,
   computeSuccessProfile,
+  getMinimumDc,
 } from "@/lib/rules";
 import type { Inventory } from "@/lib/rules";
 
@@ -27,10 +27,11 @@ describe("rules helpers", () => {
     expect(disadvantaged.salvageChance).toBe(normal.salvageChance);
   });
 
-  it("clamps T4 DC using MIN_DC", () => {
+  it("clamps T4 DC using the minimum DC", () => {
     const { dc } = computeDc("T4", "high", 10);
-    expect(dc).toBeGreaterThanOrEqual(MIN_DC);
-    expect(dc).toBe(MIN_DC);
+    const minDc = getMinimumDc();
+    expect(dc).toBeGreaterThanOrEqual(minDc);
+    expect(dc).toBe(minDc);
   });
 
   it("computes feasible attempts for several tiers", () => {

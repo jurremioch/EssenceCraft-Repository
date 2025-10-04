@@ -1,137 +1,65 @@
-import { type AdvantageMode, chanceWithAdvMode, chanceNormal } from "@/lib/math";
+import { type AdvantageMode, chanceNormal, chanceWithAdvMode } from "@/lib/math";
+import { naturalEssenceFamily } from "@/rules/natural";
+import type {
+  EssenceFamily,
+  Inventory,
+  ResourceDefinition,
+  ResourceKey,
+  RiskKey,
+  RiskProfile,
+  TierAction,
+  TierKey,
+  TierRisk,
+} from "@/rules/types";
 
-export const MIN_DC = 5;
+export type { Inventory, TierAction, TierKey } from "@/rules/types";
+export type RiskLevel = RiskKey;
 
-export type RiskLevel = "low" | "standard" | "high";
-export type TierKey = "T2" | "T3" | "T4" | "T5";
+let activeFamily: EssenceFamily = naturalEssenceFamily;
+let tierMap = new Map<TierKey, TierAction>();
+let riskProfileMap = new Map<RiskLevel, RiskProfile>();
 
-export interface Inventory {
-  raw: number;
-  fine: number;
-  fused: number;
-  superior: number;
-  supreme: number;
-  rawAE: number;
+function syncDerivedState() {
+  tierMap = new Map(activeFamily.tiers.map((tier) => [tier.key, tier]));
+  riskProfileMap = new Map(activeFamily.riskProfiles.map((profile) => [profile.key, profile]));
 }
 
-export interface SalvageRule {
-  dc: number;
-  returns: Partial<Inventory>;
+syncDerivedState();
+
+export function setActiveFamily(family: EssenceFamily) {
+  activeFamily = family;
+  syncDerivedState();
 }
 
-export interface RiskRule {
-  dc: number;
-  costs: Partial<Inventory>;
-  timeMinutes: number;
-  salvage?: SalvageRule;
+export function getActiveFamily(): EssenceFamily {
+  return activeFamily;
 }
 
-export interface TierRule {
-  label: string;
-  subtitle: string;
-  gradient: string;
-  success: Partial<Inventory>;
-  risks: Partial<Record<RiskLevel, RiskRule>>;
-  allowExtraRawAE?: boolean;
+export function getMinimumDc(): number {
+  return activeFamily.minDc;
 }
 
-export const EMPTY_INVENTORY: Inventory = {
-  raw: 0,
-  fine: 0,
-  fused: 0,
-  superior: 0,
-  supreme: 0,
-  rawAE: 0,
-};
+export function getResourceDefinitions(): ResourceDefinition[] {
+  return activeFamily.resources;
+}
 
-export const TIER_RULES: Record<TierKey, TierRule> = {
-  T2: {
-    label: "Tier 2 · Fine Essence",
-    subtitle: "Refine Raw → Fine",
-    gradient: "from-emerald-500/20 via-emerald-500/10 to-emerald-500/5",
-    success: { fine: 1 },
-    risks: {
-      low: {
-        dc: 5,
-        costs: { raw: 3 },
-        salvage: { dc: 8, returns: { raw: 2 } },
-        timeMinutes: 30,
-      },
-      standard: {
-        dc: 12,
-        costs: { raw: 2 },
-        salvage: { dc: 12, returns: { raw: 1 } },
-        timeMinutes: 60,
-      },
-      high: {
-        dc: 20,
-        costs: { raw: 1 },
-        timeMinutes: 120,
-      },
-    },
-  },
-  T3: {
-    label: "Tier 3 · Fused Essence",
-    subtitle: "Infuse Fine + RawAE → Fused",
-    gradient: "from-sky-500/20 via-sky-500/10 to-sky-500/5",
-    success: { fused: 1 },
-    risks: {
-      standard: {
-        dc: 12,
-        costs: { fine: 2, rawAE: 2 },
-        salvage: { dc: 10, returns: { fine: 2 } },
-        timeMinutes: 30,
-      },
-    },
-  },
-  T4: {
-    label: "Tier 4 · Superior Essence",
-    subtitle: "Refine Fused (+RawAE) → Superior",
-    gradient: "from-violet-500/20 via-violet-500/10 to-violet-500/5",
-    success: { superior: 1 },
-    allowExtraRawAE: true,
-    risks: {
-      low: {
-        dc: 12,
-        costs: { fused: 3 },
-        salvage: { dc: 10, returns: { fine: 5 } },
-        timeMinutes: 60,
-      },
-      standard: {
-        dc: 18,
-        costs: { fused: 2 },
-        salvage: { dc: 14, returns: { fine: 3 } },
-        timeMinutes: 120,
-      },
-      high: {
-        dc: 34,
-        costs: { fused: 1 },
-        salvage: { dc: 18, returns: { fine: 1 } },
-        timeMinutes: 480,
-      },
-    },
-  },
-  T5: {
-    label: "Tier 5 · Supreme Essence",
-    subtitle: "Refine Superior → Supreme",
-    gradient: "from-amber-500/30 via-amber-500/15 to-amber-500/5",
-    success: { supreme: 1 },
-    risks: {
-      standard: {
-        dc: 12,
-        costs: { superior: 3 },
-        salvage: { dc: 10, returns: { superior: 2 } },
-        timeMinutes: 60,
-      },
-      high: {
-        dc: 18,
-        costs: { superior: 2 },
-        salvage: { dc: 15, returns: { superior: 1 } },
-        timeMinutes: 120,
-      },
-    },
-  },
-};
+export function getRiskProfiles(): RiskProfile[] {
+  return activeFamily.riskProfiles;
+}
+
+export function getTierOrder(): TierKey[] {
+  return activeFamily.tiers.map((tier) => tier.key);
+}
+
+export function createEmptyInventory(): Inventory {
+  const inventory: Inventory = {};
+  for (const resource of activeFamily.resources) {
+    inventory[resource.key] = 0;
+  }
+  return inventory;
+}
+
+export const EMPTY_INVENTORY: Inventory = createEmptyInventory();
 
 export interface SuccessProfile {
   dc: number;
@@ -140,53 +68,74 @@ export interface SuccessProfile {
   successChance: number;
 }
 
-export function getTierRule(tier: TierKey): TierRule {
-  return TIER_RULES[tier];
+export function getTierRule(tier: TierKey): TierAction {
+  const rule = tierMap.get(tier);
+  if (!rule) {
+    throw new Error(`Unknown tier: ${tier}`);
+  }
+  return rule;
 }
 
-export function getRiskRule(tier: TierKey, risk: RiskLevel): RiskRule {
+export function getRiskRule(tier: TierKey, risk: RiskLevel): TierRisk {
   const tierRule = getTierRule(tier);
-  const riskRule = tierRule.risks[risk];
-  if (!riskRule) {
+  const rule = tierRule.risks.find((entry) => entry.risk === risk);
+  if (!rule) {
     throw new Error(`${tier} does not support ${risk} risk.`);
   }
-
-  return riskRule;
+  return rule;
 }
 
 export function getSupportedRisks(tier: TierKey): RiskLevel[] {
-  return Object.keys(getTierRule(tier).risks) as RiskLevel[];
+  const tierRule = getTierRule(tier);
+  const available = new Set(tierRule.risks.map((risk) => risk.risk));
+  const ordered: RiskLevel[] = activeFamily.riskProfiles
+    .map((profile) => profile.key)
+    .filter((key) => available.has(key));
+
+  for (const risk of tierRule.risks) {
+    if (!ordered.includes(risk.risk)) {
+      ordered.push(risk.risk);
+    }
+  }
+
+  return ordered;
 }
 
 export function computeDc(
   tier: TierKey,
   risk: RiskLevel,
-  extraRawAE: number,
-): { dc: number; wastedExtra: number } {
+  extraResource = 0,
+): { dc: number; wastedExtra: number; reductionResource?: ResourceKey } {
   const riskRule = getRiskRule(tier, risk);
-  if (tier !== "T4") {
-    return { dc: riskRule.dc, wastedExtra: 0 };
+  const tierRule = getTierRule(tier);
+  const reduction = tierRule.dcReduction;
+
+  if (!reduction || extraResource <= 0) {
+    return { dc: riskRule.dc, wastedExtra: 0, reductionResource: reduction?.resource };
   }
 
-  const maxReduction = Math.max(0, riskRule.dc - MIN_DC);
-  const maxExtraNeeded = Math.ceil(maxReduction / 4);
-  const usedExtra = Math.min(extraRawAE, maxExtraNeeded);
-  const dc = Math.max(MIN_DC, riskRule.dc - usedExtra * 4);
-  const wastedExtra = Math.max(0, extraRawAE - usedExtra);
+  const minDc = reduction.minDc ?? getMinimumDc();
+  const perUnit = Math.max(1, reduction.perUnit);
+  const maxReduction = Math.max(0, riskRule.dc - minDc);
+  const maxExtraNeeded = Math.ceil(maxReduction / perUnit);
+  const usedExtra = Math.min(extraResource, maxExtraNeeded);
+  const dc = Math.max(minDc, riskRule.dc - usedExtra * perUnit);
+  const wastedExtra = Math.max(0, extraResource - usedExtra);
 
-  return { dc, wastedExtra };
+  return { dc, wastedExtra, reductionResource: reduction.resource };
 }
 
 export function computeAttemptCost(
   tier: TierKey,
   risk: RiskLevel,
-  extraRawAE: number,
+  extraResource = 0,
 ): Partial<Inventory> {
   const base = { ...getRiskRule(tier, risk).costs };
-  if (tier === "T4" && extraRawAE > 0) {
-    base.rawAE = (base.rawAE ?? 0) + extraRawAE;
+  const tierRule = getTierRule(tier);
+  if (tierRule.dcReduction && extraResource > 0) {
+    const resourceKey = tierRule.dcReduction.resource;
+    base[resourceKey] = (base[resourceKey] ?? 0) + extraResource;
   }
-
   return base;
 }
 
@@ -194,13 +143,13 @@ export function computeMaxAttempts(
   inventory: Inventory,
   tier: TierKey,
   risk: RiskLevel,
-  extraRawAE: number,
+  extraResource = 0,
 ): number {
-  const costs = computeAttemptCost(tier, risk, extraRawAE);
+  const costs = computeAttemptCost(tier, risk, extraResource);
   const limits = Object.entries(costs)
     .filter(([, amount]) => (amount ?? 0) > 0)
     .map(([resource, amount]) => {
-      const available = inventory[resource as keyof Inventory] ?? 0;
+      const available = inventory[resource] ?? 0;
       return Math.floor(available / (amount ?? 1));
     });
 
@@ -214,11 +163,11 @@ export function computeMaxAttempts(
 export function computeSuccessProfile(
   tier: TierKey,
   risk: RiskLevel,
-  extraRawAE: number,
+  extraResource: number,
   modifier: number,
   advantage: AdvantageMode,
 ): SuccessProfile {
-  const { dc } = computeDc(tier, risk, extraRawAE);
+  const { dc } = computeDc(tier, risk, extraResource);
   const riskRule = getRiskRule(tier, risk);
   const successChance = chanceWithAdvMode(dc, modifier, advantage);
   const salvageChance = riskRule.salvage
@@ -240,7 +189,8 @@ export function applyInventoryDelta(
   const next = { ...inventory };
   for (const [key, amount] of Object.entries(delta)) {
     const typedKey = key as keyof Inventory;
-    next[typedKey] = Math.max(0, Math.round((next[typedKey] ?? 0) + (amount ?? 0)));
+    const current = next[typedKey] ?? 0;
+    next[typedKey] = Math.max(0, Math.round(current + (amount ?? 0)));
   }
 
   return next;
@@ -248,13 +198,22 @@ export function applyInventoryDelta(
 
 export function runSmokeTests(): string[] {
   const messages: string[] = [];
-  for (const tier of Object.keys(TIER_RULES) as TierKey[]) {
-    const risks = getSupportedRisks(tier);
-    messages.push(`${tier} supports risks: ${risks.join(", ")}`);
+  messages.push(`Active family: ${activeFamily.label} (${getTierOrder().length} tiers)`);
+
+  for (const tier of getTierOrder()) {
+    const tierRule = getTierRule(tier);
+    const risks = getSupportedRisks(tier).map((risk) => riskProfileMap.get(risk)?.label ?? risk);
+    messages.push(`${tierRule.label} supports risks: ${risks.join(", ")}`);
   }
 
-  const { dc } = computeDc("T4", "high", 10);
-  messages.push(`T4 high DC clamps to ${dc}`);
+  const reductionTier = activeFamily.tiers.find((tier) => tier.dcReduction);
+  if (reductionTier) {
+    const resource = reductionTier.dcReduction.resource;
+    const { dc } = computeDc(reductionTier.key, reductionTier.risks[0].risk, 999);
+    messages.push(
+      `${reductionTier.key} DC clamps at ${dc} when stacking ${resource} (min ${getMinimumDc()})`,
+    );
+  }
 
   return messages;
 }
