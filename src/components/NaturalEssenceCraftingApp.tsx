@@ -281,6 +281,7 @@ export function NaturalEssenceCraftingApp({
     state.settings.rollMode === "auto" ? state.settings.advantage : "normal";
 
   const handleInventoryChange = (key: keyof Inventory, value: number) => {
+    setPrevInventory((snapshot) => snapshot ?? cloneInventory(state.inventory));
     setState((prev) => ({
       ...prev,
       inventory: {
