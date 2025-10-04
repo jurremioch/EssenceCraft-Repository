@@ -1142,7 +1142,7 @@ export function NaturalEssenceCraftingApp({
                   Latest main roll results with modifiers applied.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="max-h-80 overflow-y-auto pr-1 gap-3">
+              <CardContent className="flex flex-col max-h-80 overflow-y-auto pr-1 gap-3">
                 {state.rolls.checks.length === 0 ? (
                   <p className="text-xs text-slate-500">No rolls yet.</p>
                 ) : (
@@ -1179,7 +1179,7 @@ export function NaturalEssenceCraftingApp({
                   Salvage checks from failed attempts.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="max-h-80 overflow-y-auto pr-1 gap-3">
+              <CardContent className="flex flex-col max-h-80 overflow-y-auto pr-1 gap-3">
                 {state.rolls.salvages.length === 0 ? (
                   <p className="text-xs text-slate-500">No salvage rolls yet.</p>
                 ) : (
@@ -1217,7 +1217,7 @@ export function NaturalEssenceCraftingApp({
                 Latest attempts with resource deltas.
               </CardDescription>
             </CardHeader>
-            <CardContent className="max-h-80 overflow-y-auto pr-1 text-sm gap-3">
+            <CardContent className="flex flex-col max-h-80 overflow-y-auto pr-1 text-sm gap-3">
               {state.log.length === 0 ? (
                 <p className="text-xs text-slate-500">No crafting actions yet.</p>
               ) : (
