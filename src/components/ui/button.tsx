@@ -9,18 +9,18 @@ export interface ButtonProps
 }
 
 const buttonVariants =
-  "inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-50 disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex h-9 items-center justify-center whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60";
 
 export const buttonStyles = {
-  default: "bg-indigo-600 text-white hover:bg-indigo-700",
-  primary: "bg-indigo-600 text-white hover:bg-indigo-700",
+  default: "bg-primary text-primary-foreground hover:bg-primary/90",
+  primary: "bg-primary text-primary-foreground hover:bg-primary/90",
   secondary:
-    "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+    "border border-border bg-muted text-foreground hover:bg-muted/80",
   outline:
-    "border border-slate-300 bg-transparent text-slate-700 hover:bg-slate-50",
-  ghost: "text-slate-700 hover:bg-slate-100",
+    "border border-border bg-transparent text-foreground hover:bg-muted/80",
+  ghost: "text-foreground hover:bg-muted",
   destructive:
-    "bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-500",
+    "bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive-border",
 };
 
 type VariantKey = keyof typeof buttonStyles;

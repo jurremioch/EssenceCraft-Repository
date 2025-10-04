@@ -48,7 +48,7 @@ export const TIER_RULES: Record<TierKey, TierRule> = {
   T2: {
     label: "Tier 2 · Fine Essence",
     subtitle: "Refine Raw → Fine",
-    gradient: "from-emerald-500/20 via-emerald-500/10 to-emerald-500/5",
+    gradient: "from-tier-2-start/20 via-tier-2-start/10 to-tier-2-end/5",
     success: { fine: 1 },
     risks: {
       low: {
@@ -73,7 +73,7 @@ export const TIER_RULES: Record<TierKey, TierRule> = {
   T3: {
     label: "Tier 3 · Fused Essence",
     subtitle: "Infuse Fine + RawAE → Fused",
-    gradient: "from-sky-500/20 via-sky-500/10 to-sky-500/5",
+    gradient: "from-tier-3-start/20 via-tier-3-start/10 to-tier-3-end/5",
     success: { fused: 1 },
     risks: {
       standard: {
@@ -87,7 +87,7 @@ export const TIER_RULES: Record<TierKey, TierRule> = {
   T4: {
     label: "Tier 4 · Superior Essence",
     subtitle: "Refine Fused (+RawAE) → Superior",
-    gradient: "from-violet-500/20 via-violet-500/10 to-violet-500/5",
+    gradient: "from-tier-4-start/20 via-tier-4-start/10 to-tier-4-end/5",
     success: { superior: 1 },
     allowExtraRawAE: true,
     risks: {
@@ -114,7 +114,7 @@ export const TIER_RULES: Record<TierKey, TierRule> = {
   T5: {
     label: "Tier 5 · Supreme Essence",
     subtitle: "Refine Superior → Supreme",
-    gradient: "from-amber-500/30 via-amber-500/15 to-amber-500/5",
+    gradient: "from-tier-5-start/30 via-tier-5-start/15 to-tier-5-end/5",
     success: { supreme: 1 },
     risks: {
       standard: {

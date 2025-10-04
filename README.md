@@ -27,3 +27,9 @@ The development server runs on [http://localhost:5173](http://localhost:5173). T
 - Animated dice overlay for the latest single attempt plus dual-column recent roll history.
 - Detailed action log, smoke test diagnostics, and session timers for flavour time tracking.
 - Game rules, feasibility checks, and probability helpers covered by Vitest unit tests.
+
+## Theming & accessibility
+
+- Light and dark palettes are driven by CSS variables that respect the system `prefers-color-scheme` setting.
+- A dark-mode toggle is available in the Settings panel to override the system preference at any time.
+- Semantic Tailwind tokens (e.g. `bg-background`, `text-foreground`, `border-border`) replace fixed hex values to guarantee consistent contrast in both themes.

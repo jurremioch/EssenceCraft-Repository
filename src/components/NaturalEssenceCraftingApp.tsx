@@ -16,6 +16,7 @@ import {
 
 import { DiceOverlay } from "@/components/DiceOverlay";
 import type { DiceFace } from "@/components/DiceOverlay";
+import { useTheme } from "@/components/theme/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -129,14 +130,14 @@ const createDefaultState = (): AppState => ({
 const TIER_ORDER: TierKey[] = ["T2", "T3", "T4", "T5"];
 
 const TIER_GRADIENTS: Record<TierKey, string> = {
-  T2: "from-emerald-400 to-emerald-600",
-  T3: "from-sky-400 to-sky-600",
-  T4: "from-violet-400 to-violet-600",
-  T5: "from-amber-400 to-amber-600",
+  T2: "from-tier-2-start to-tier-2-end",
+  T3: "from-tier-3-start to-tier-3-end",
+  T4: "from-tier-4-start to-tier-4-end",
+  T5: "from-tier-5-start to-tier-5-end",
 };
 
 const focusRing =
-  "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2";
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 const Chip = ({
   ok = true,
@@ -154,8 +155,8 @@ const Chip = ({
     className={cn(
       "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm",
       ok
-        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-        : "border-rose-200 bg-rose-50 text-rose-700",
+        ? "border-success-border bg-success text-success-foreground"
+        : "border-destructive-border bg-destructive text-destructive-foreground",
       className,
     )}
   >
@@ -263,6 +264,7 @@ export function NaturalEssenceCraftingApp({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [manualCheckText, setManualCheckText] = useState<string>("");
   const [manualSalvageText, setManualSalvageText] = useState<string>("");
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     saveState(state);
@@ -550,7 +552,7 @@ export function NaturalEssenceCraftingApp({
       );
     });
 
-    return chips.length > 0 ? chips : <span className="text-xs text-slate-500">No net change</span>;
+    return chips.length > 0 ? chips : <span className="text-xs text-muted-foreground">No net change</span>;
   };
 
   const renderTierPanel = (tier: TierKey) => {
@@ -652,19 +654,19 @@ export function NaturalEssenceCraftingApp({
     const runButtonLabel = disabledReason ? "Unavailable" : `Run batch (${attempts})`;
 
     return (
-      <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <Card className="rounded-2xl border border-border bg-card shadow-sm">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-lg font-semibold text-slate-900">
+          <CardTitle className="text-lg font-semibold text-card-foreground">
             <span
               className={`bg-gradient-to-r ${TIER_GRADIENTS[tier]} bg-clip-text text-transparent`}
             >
               {rule.subtitle}
             </span>
           </CardTitle>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             {riskRule.timeMinutes} minutes per attempt · DC {dc}
             {tier === "T4" && wastedExtra > 0 ? (
-              <span className="ml-1 text-amber-600">
+              <span className="ml-1 text-destructive-foreground">
                 {wastedExtra} RawAE wasted beyond DC {MIN_DC}
               </span>
             ) : null}
@@ -722,7 +724,7 @@ export function NaturalEssenceCraftingApp({
                         [tier]: clampInt(Number(event.target.value), 1, 999),
                       }))
                     }
-                    className="h-9 w-24 text-center focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="h-9 w-24 text-center focus-visible:ring-2 focus-visible:ring-ring"
                   />
                   <Button
                     type="button"
@@ -743,7 +745,7 @@ export function NaturalEssenceCraftingApp({
                     variant="outline"
                     className={cn(
                       focusRing,
-                      "h-9 px-3 text-xs text-indigo-600 hover:text-indigo-700",
+                      "h-9 px-3 text-xs text-primary hover:text-primary/80",
                     )}
                     onClick={() =>
                       setAttemptCounts((prev) => ({
@@ -778,7 +780,7 @@ export function NaturalEssenceCraftingApp({
                       onChange={(event) =>
                         setT4ExtraRawAE(Math.max(0, Math.round(Number(event.target.value))))
                       }
-                      className="h-9 w-24 text-center focus-visible:ring-2 focus-visible:ring-indigo-500"
+                      className="h-9 w-24 text-center focus-visible:ring-2 focus-visible:ring-ring"
                     />
                     <Button
                       type="button"
@@ -789,7 +791,7 @@ export function NaturalEssenceCraftingApp({
                     >
                       <Plus className="h-4 w-4" aria-hidden="true" />
                     </Button>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[11px] text-muted-foreground">
                       Lowers DC by 4 each (minimum {MIN_DC}).
                     </p>
                   </div>
@@ -797,14 +799,14 @@ export function NaturalEssenceCraftingApp({
               ) : null}
 
               <div className="space-y-1">
-                <p className="text-[11px] font-medium text-slate-500">
+                <p className="text-[11px] font-medium text-muted-foreground">
                   Requirements for {attempts} attempt{attempts === 1 ? "" : "s"}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {requirementChips.length > 0 ? (
                     requirementChips
                   ) : (
-                    <span className="text-xs text-slate-500">No resources required.</span>
+                    <span className="text-xs text-muted-foreground">No resources required.</span>
                   )}
                 </div>
               </div>
@@ -819,7 +821,7 @@ export function NaturalEssenceCraftingApp({
                       title={disabledReason ?? undefined}
                       className={cn(
                         focusRing,
-                        "w-full justify-center bg-indigo-600 text-white hover:bg-indigo-700",
+                        "w-full justify-center bg-primary text-primary-foreground hover:bg-primary/90",
                         disabledReason ? "cursor-not-allowed opacity-60" : "",
                       )}
                     >
@@ -833,26 +835,26 @@ export function NaturalEssenceCraftingApp({
 
             <div className="space-y-3">
               <div className="space-y-2">
-                <p className="text-sm font-semibold text-slate-700">Snapshot</p>
+                <p className="text-sm font-semibold text-foreground">Snapshot</p>
                 <div className="flex flex-wrap gap-2">
                   <Chip title="Chance main check succeeds">Success {successPct}%</Chip>
                   {salvagePct !== undefined ? (
                     <Chip title="Chance salvage succeeds">Salvage {salvagePct}%</Chip>
                   ) : null}
-                  <Chip className="border-indigo-200 bg-indigo-50 text-indigo-700" title="Difficulty class">
+                  <Chip className="border-accent-border bg-accent text-accent-foreground" title="Difficulty class">
                     DC {dc}
                   </Chip>
                   <Chip ok={feasibilityOk} title="Attempts you can afford right now">
                     Feasible {feasibleLabel}
                   </Chip>
                   <Chip
-                    className="border-slate-200 bg-white text-slate-700"
+                    className="border-border bg-card text-foreground"
                     title="Time required for this batch"
                   >
                     Time {formatMinutes(totalTime)}
                   </Chip>
                   <Chip
-                    className="border-slate-200 bg-white text-slate-700"
+                    className="border-border bg-card text-foreground"
                     title="Resources consumed each attempt"
                   >
                     Consumes {consumptionSummary || "nothing"}
@@ -861,34 +863,34 @@ export function NaturalEssenceCraftingApp({
               </div>
 
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-slate-700">Consumes per attempt</p>
+                <p className="text-sm font-semibold text-foreground">Consumes per attempt</p>
                 <div className="flex flex-wrap gap-2">
                   {consumesPerAttempt.length > 0 ? (
                     consumesPerAttempt
                   ) : (
-                    <span className="text-xs text-slate-500">No costs.</span>
+                    <span className="text-xs text-muted-foreground">No costs.</span>
                   )}
                 </div>
               </div>
 
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-slate-700">On success</p>
+                <p className="text-sm font-semibold text-foreground">On success</p>
                 <div className="flex flex-wrap gap-2">
                   {producesOnSuccess.length > 0 ? (
                     producesOnSuccess
                   ) : (
-                    <span className="text-xs text-slate-500">No resource change.</span>
+                    <span className="text-xs text-muted-foreground">No resource change.</span>
                   )}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <Calculator className="h-4 w-4 text-indigo-600" aria-hidden="true" />
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Calculator className="h-4 w-4 text-primary" aria-hidden="true" />
                   Expected value per attempt
                   <Tooltip>
                     <TooltipTrigger aria-label="Expected value explanation">
-                      <Info className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                      <Info className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                     </TooltipTrigger>
                     <TooltipContent>
                       Success, failure, and salvage chances combined into an average resource change per attempt.
@@ -913,31 +915,31 @@ export function NaturalEssenceCraftingApp({
         <header className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <FlaskConical className="h-7 w-7 text-indigo-600" aria-hidden="true" />
-              <h1 className="text-2xl font-semibold text-slate-900">Natural essence crafting</h1>
+              <FlaskConical className="h-7 w-7 text-primary" aria-hidden="true" />
+              <h1 className="text-2xl font-semibold text-card-foreground">Natural essence crafting</h1>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Chip className="border-slate-200 bg-white text-slate-700" title="Session duration">
+              <Chip className="border-border bg-card text-foreground" title="Session duration">
                 Session {formatMinutes(state.sessionMinutes)}
               </Chip>
-              <Chip className="border-slate-200 bg-white text-slate-700" title="Log entries recorded">
+              <Chip className="border-border bg-card text-foreground" title="Log entries recorded">
                 Log {state.log.length}
               </Chip>
-              <Chip className="border-slate-200 bg-white text-slate-700" title="Total recent rolls tracked">
+              <Chip className="border-border bg-card text-foreground" title="Total recent rolls tracked">
                 Rolls {state.rolls.checks.length + state.rolls.salvages.length}
               </Chip>
             </div>
           </div>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted-foreground">
             Track inventory, roll checks, and keep your refinement pipeline humming.
           </p>
         </header>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <Card className="md:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <Card className="md:col-span-2 rounded-2xl border border-border bg-card shadow-sm">
             <CardHeader className="space-y-1">
-              <CardTitle className="text-lg font-semibold text-slate-900">Inventory</CardTitle>
-              <CardDescription className="text-[11px] text-slate-500">
+              <CardTitle className="text-lg font-semibold text-card-foreground">Inventory</CardTitle>
+              <CardDescription className="text-[11px] text-muted-foreground">
                 Update your current stock. Crafting actions adjust automatically.
               </CardDescription>
             </CardHeader>
@@ -945,7 +947,7 @@ export function NaturalEssenceCraftingApp({
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {RESOURCES.map((resource) => (
                   <div key={resource} className="flex items-center justify-between gap-3">
-                    <Label htmlFor={`inv-${resource}`} className="text-sm font-medium text-slate-600">
+                    <Label htmlFor={`inv-${resource}`} className="text-sm font-medium text-muted-foreground">
                       {RESOURCE_LABELS[resource]}
                     </Label>
                     <Input
@@ -956,7 +958,7 @@ export function NaturalEssenceCraftingApp({
                       onChange={(event) =>
                         handleInventoryChange(resource, Math.max(0, Number(event.target.value)))
                       }
-                      className="h-9 w-24 text-right focus-visible:ring-2 focus-visible:ring-indigo-500"
+                      className="h-9 w-24 text-right focus-visible:ring-2 focus-visible:ring-ring"
                     />
                   </div>
                 ))}
@@ -982,10 +984,10 @@ export function NaturalEssenceCraftingApp({
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <Card className="rounded-2xl border border-border bg-card shadow-sm">
             <CardHeader className="space-y-1">
-              <CardTitle className="text-lg font-semibold text-slate-900">Settings & rolls</CardTitle>
-              <CardDescription className="text-[11px] text-slate-500">
+              <CardTitle className="text-lg font-semibold text-card-foreground">Settings & rolls</CardTitle>
+              <CardDescription className="text-[11px] text-muted-foreground">
                 Configure modifiers, rolling behaviour, and queue manual results.
               </CardDescription>
             </CardHeader>
@@ -1006,7 +1008,7 @@ export function NaturalEssenceCraftingApp({
                         },
                       }))
                     }
-                    className="h-9 w-24 focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="h-9 w-24 focus-visible:ring-2 focus-visible:ring-ring"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -1034,19 +1036,19 @@ export function NaturalEssenceCraftingApp({
                     </SelectContent>
                   </Select>
                   {state.settings.rollMode === "manual" ? (
-                    <p className="text-[11px] text-slate-500">Manual mode always rolls a single d20.</p>
+                    <p className="text-[11px] text-muted-foreground">Manual mode always rolls a single d20.</p>
                   ) : null}
                 </div>
               </div>
 
               <div className="grid gap-3">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                <div className="rounded-2xl border border-border bg-muted/70 px-4 py-3">
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-sm font-semibold text-slate-700">Auto rolling</p>
-                      <p className="text-[11px] text-slate-500">Toggle manual queues for precise control.</p>
+                      <p className="text-sm font-semibold text-foreground">Auto rolling</p>
+                      <p className="text-[11px] text-muted-foreground">Toggle manual queues for precise control.</p>
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                       <span>Manual</span>
                       <Switch
                         aria-label="Toggle auto rolling"
@@ -1066,16 +1068,30 @@ export function NaturalEssenceCraftingApp({
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                <div className="rounded-2xl border border-border bg-muted/70 px-4 py-3">
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-sm font-semibold text-slate-700">Compact mode</p>
-                      <p className="text-[11px] text-slate-500">Reduce padding and gaps across the interface.</p>
+                      <p className="text-sm font-semibold text-foreground">Compact mode</p>
+                      <p className="text-[11px] text-muted-foreground">Reduce padding and gaps across the interface.</p>
                     </div>
                     <Switch
                       aria-label="Toggle compact layout"
                       checked={compactMode}
                       onCheckedChange={(checked) => onToggleCompactMode(checked)}
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-muted/70 px-4 py-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Dark mode</p>
+                      <p className="text-[11px] text-muted-foreground">Switch between light and dark palettes.</p>
+                    </div>
+                    <Switch
+                      aria-label="Toggle dark mode"
+                      checked={theme === "dark"}
+                      onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
                     />
                   </div>
                 </div>
@@ -1096,7 +1112,7 @@ export function NaturalEssenceCraftingApp({
                       }
                     }}
                     placeholder="e.g. 12,5,18"
-                    className="h-9 focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="h-9 focus-visible:ring-2 focus-visible:ring-ring"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -1113,7 +1129,7 @@ export function NaturalEssenceCraftingApp({
                       }
                     }}
                     placeholder="e.g. 7,16"
-                    className="h-9 focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="h-9 focus-visible:ring-2 focus-visible:ring-ring"
                   />
                 </div>
               </div>
@@ -1129,7 +1145,7 @@ export function NaturalEssenceCraftingApp({
                 </Button>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-xs text-slate-600">
+              <div className="rounded-2xl border border-border bg-muted/70 px-4 py-3 text-xs text-muted-foreground">
                 <p>
                   Recent rolls: {state.rolls.checks.length} main · {state.rolls.salvages.length} salvage.
                 </p>
@@ -1140,8 +1156,8 @@ export function NaturalEssenceCraftingApp({
         </div>
 
         {statusMessage ? (
-          <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-sm">
-            <BadgeCheck className="h-4 w-4" aria-hidden="true" />
+          <div className="flex items-center gap-2 rounded-2xl border border-success-border bg-success px-4 py-3 text-sm text-success-foreground shadow-sm">
+            <BadgeCheck className="h-4 w-4 text-success-foreground" aria-hidden="true" />
             {statusMessage}
           </div>
         ) : null}
@@ -1151,12 +1167,12 @@ export function NaturalEssenceCraftingApp({
           onValueChange={(value) => setActiveTier(value as TierKey)}
           className="flex flex-col gap-4"
         >
-          <TabsList className="grid grid-cols-4 sticky top-0 z-10 border-b border-slate-200 bg-slate-50/90 backdrop-blur">
+          <TabsList className="grid grid-cols-4 sticky top-0 z-10 border-b border-border bg-muted/90 backdrop-blur">
             {TIER_ORDER.map((tier) => (
               <TabsTrigger
                 key={tier}
                 value={tier}
-                className="rounded-none px-3 py-2 text-sm font-medium text-slate-600 data-[state=active]:border-b-2 data-[state=active]:border-indigo-500 data-[state=active]:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                className="rounded-none px-3 py-2 text-sm font-medium text-muted-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {tier}
               </TabsTrigger>
@@ -1171,74 +1187,74 @@ export function NaturalEssenceCraftingApp({
 
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <div className="grid gap-6 md:grid-cols-2">
-            <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <Card className="rounded-2xl border border-border bg-card shadow-sm">
               <CardHeader className="space-y-1">
-                <CardTitle className="text-lg font-semibold text-slate-900">Recent checks</CardTitle>
-                <CardDescription className="text-[11px] text-slate-500">
+                <CardTitle className="text-lg font-semibold text-card-foreground">Recent checks</CardTitle>
+                <CardDescription className="text-[11px] text-muted-foreground">
                   Latest main roll results with modifiers applied.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-1">
                 {state.rolls.checks.length === 0 ? (
-                  <p className="text-xs text-slate-500">No rolls yet.</p>
+                  <p className="text-xs text-muted-foreground">No rolls yet.</p>
                 ) : (
                   state.rolls.checks.map((roll) => (
                     <div
                       key={roll.id}
-                      className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
+                      className="flex flex-col gap-1 rounded-xl border border-border bg-card px-3 py-2 shadow-sm"
                     >
-                      <div className="flex items-center justify-between text-[11px] text-slate-500">
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                         <span>{new Date(roll.timestamp).toLocaleTimeString()}</span>
                         <span>
                           {roll.tier} · {roll.risk}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between font-mono text-xs text-slate-900">
+                      <div className="flex items-center justify-between font-mono text-xs text-card-foreground">
                         <span>
                           d20 {roll.raw} + {roll.modifier} = {roll.total}
                         </span>
-                        <span className={roll.success ? "text-emerald-600" : "text-rose-600"}>
+                        <span className={roll.success ? "text-success-foreground" : "text-destructive-foreground"}>
                           {roll.success ? "✓" : "✗"}
                         </span>
                       </div>
-                      <p className="font-mono text-[11px] text-slate-500">DC {roll.dc}</p>
+                      <p className="font-mono text-[11px] text-muted-foreground">DC {roll.dc}</p>
                     </div>
                   ))
                 )}
               </CardContent>
             </Card>
 
-            <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <Card className="rounded-2xl border border-border bg-card shadow-sm">
               <CardHeader className="space-y-1">
-                <CardTitle className="text-lg font-semibold text-slate-900">Recent salvage</CardTitle>
-                <CardDescription className="text-[11px] text-slate-500">
+                <CardTitle className="text-lg font-semibold text-card-foreground">Recent salvage</CardTitle>
+                <CardDescription className="text-[11px] text-muted-foreground">
                   Salvage checks from failed attempts.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-1">
                 {state.rolls.salvages.length === 0 ? (
-                  <p className="text-xs text-slate-500">No salvage rolls yet.</p>
+                  <p className="text-xs text-muted-foreground">No salvage rolls yet.</p>
                 ) : (
                   state.rolls.salvages.map((roll) => (
                     <div
                       key={roll.id}
-                      className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
+                      className="flex flex-col gap-1 rounded-xl border border-border bg-card px-3 py-2 shadow-sm"
                     >
-                      <div className="flex items-center justify-between text-[11px] text-slate-500">
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                         <span>{new Date(roll.timestamp).toLocaleTimeString()}</span>
                         <span>
                           {roll.tier} · {roll.risk}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between font-mono text-xs text-slate-900">
+                      <div className="flex items-center justify-between font-mono text-xs text-card-foreground">
                         <span>
                           d20 {roll.raw} + {roll.modifier} = {roll.total}
                         </span>
-                        <span className={roll.success ? "text-emerald-600" : "text-rose-600"}>
+                        <span className={roll.success ? "text-success-foreground" : "text-destructive-foreground"}>
                           {roll.success ? "✓" : "✗"}
                         </span>
                       </div>
-                      <p className="font-mono text-[11px] text-slate-500">DC {roll.dc}</p>
+                      <p className="font-mono text-[11px] text-muted-foreground">DC {roll.dc}</p>
                     </div>
                   ))
                 )}
@@ -1246,29 +1262,29 @@ export function NaturalEssenceCraftingApp({
             </Card>
           </div>
 
-          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <Card className="rounded-2xl border border-border bg-card shadow-sm">
             <CardHeader className="space-y-1">
-              <CardTitle className="text-lg font-semibold text-slate-900">Action log</CardTitle>
-              <CardDescription className="text-[11px] text-slate-500">
+              <CardTitle className="text-lg font-semibold text-card-foreground">Action log</CardTitle>
+              <CardDescription className="text-[11px] text-muted-foreground">
                 Latest attempts with resource deltas.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-1 text-sm">
               {state.log.length === 0 ? (
-                <p className="text-xs text-slate-500">No crafting actions yet.</p>
+                <p className="text-xs text-muted-foreground">No crafting actions yet.</p>
               ) : (
                 state.log.map((entry) => (
                   <div
                     key={entry.id}
-                    className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
+                    className="flex flex-col gap-1 rounded-xl border border-border bg-card px-3 py-2 shadow-sm"
                   >
-                    <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                       <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
                       <span>
                         {entry.tier === "system" ? "System" : `${entry.tier} · ${entry.risk}`}
                       </span>
                     </div>
-                    <p className="text-sm text-slate-700">{entry.text}</p>
+                    <p className="text-sm text-foreground">{entry.text}</p>
                   </div>
                 ))
               )}
