@@ -3,9 +3,7 @@ import type { ReactNode } from "react";
 import {
   BadgeCheck,
   Calculator,
-  Clock3,
   FlaskConical,
-  Gauge,
   Info,
   Minus,
   PackageMinus,
@@ -13,13 +11,11 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
-  Target,
   Trash2,
 } from "lucide-react";
 
 import { DiceOverlay } from "@/components/DiceOverlay";
 import type { DiceFace } from "@/components/DiceOverlay";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -138,6 +134,34 @@ const TIER_GRADIENTS: Record<TierKey, string> = {
   T4: "from-violet-400 to-violet-600",
   T5: "from-amber-400 to-amber-600",
 };
+
+const focusRing =
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2";
+
+const Chip = ({
+  ok = true,
+  title,
+  children,
+  className,
+}: {
+  ok?: boolean;
+  title?: string;
+  children: ReactNode;
+  className?: string;
+}) => (
+  <span
+    title={title}
+    className={cn(
+      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm",
+      ok
+        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        : "border-rose-200 bg-rose-50 text-rose-700",
+      className,
+    )}
+  >
+    {children}
+  </span>
+);
 
 interface NaturalEssenceCraftingAppProps {
   compactMode: boolean;
@@ -518,16 +542,11 @@ export function NaturalEssenceCraftingApp({
     const chips = RESOURCES.filter((key) => (expected[key] ?? 0) !== 0).map((key) => {
       const value = expected[key] ?? 0;
       const sign = value > 0 ? "+" : "";
-      const tone =
-        value > 0
-          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-          : value < 0
-            ? "border-rose-200 bg-rose-50 text-rose-700"
-            : "border-slate-200 bg-slate-100 text-slate-700";
       return (
-        <Badge key={key} variant="outline" className={tone}>
-          {sign}{value.toFixed(2)} {RESOURCE_LABELS[key]}
-        </Badge>
+        <Chip key={key} ok={value >= 0}>
+          {sign}
+          {value.toFixed(2)} {RESOURCE_LABELS[key]}
+        </Chip>
       );
     });
 
@@ -578,20 +597,13 @@ export function NaturalEssenceCraftingApp({
       const have = state.inventory[resource] ?? 0;
       const enough = have >= need;
       return [
-        <Badge
+        <Chip
           key={resource}
-          variant="outline"
-          className={cn(
-            "gap-1 rounded-full border px-3 py-1 text-xs",
-            enough
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-rose-200 bg-rose-50 text-rose-700",
-          )}
+          ok={enough}
+          title={`Need ${need} ${RESOURCE_LABELS[resource]} (have ${have}) for this batch`}
         >
-          Need {need}
-          <span className="text-slate-400">·</span>
-          Have {have}
-        </Badge>,
+          Need {need} {RESOURCE_LABELS[resource]}
+        </Chip>,
       ];
     });
 
@@ -599,13 +611,14 @@ export function NaturalEssenceCraftingApp({
       const value = attemptCosts[resource];
       if (!value) return [];
       return [
-        <Badge
+        <Chip
           key={`consume-${resource}`}
-          variant="outline"
-          className="gap-1 rounded-full border-slate-200/80 bg-white text-xs text-slate-700"
+          ok={false}
+          className="flex items-center gap-1"
+          title={`Consumes ${value} ${RESOURCE_LABELS[resource]} per attempt`}
         >
-          <PackageMinus className="h-3.5 w-3.5 text-rose-500" />-{value} {RESOURCE_LABELS[resource]}
-        </Badge>,
+          <PackageMinus className="h-3 w-3" aria-hidden="true" />-{value} {RESOURCE_LABELS[resource]}
+        </Chip>,
       ];
     });
 
@@ -613,69 +626,54 @@ export function NaturalEssenceCraftingApp({
       const value = rule.success[resource];
       if (!value) return [];
       return [
-        <Badge
+        <Chip
           key={`produce-${resource}`}
-          variant="outline"
-          className="gap-1 rounded-full border-slate-200/80 bg-white text-xs text-slate-700"
+          ok
+          className="flex items-center gap-1"
+          title={`On success gain ${value} ${RESOURCE_LABELS[resource]}`}
         >
-          <PackagePlus className="h-3.5 w-3.5 text-emerald-500" />+{value} {RESOURCE_LABELS[resource]}
-        </Badge>,
+          <PackagePlus className="h-3 w-3" aria-hidden="true" />+{value} {RESOURCE_LABELS[resource]}
+        </Chip>,
       ];
     });
 
-    const infoPills = [
-      {
-        key: "success",
-        icon: <Sparkles className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />,
-        label: `Success ${Math.round(profile.successChance * 100)}%`,
-      },
-      salvageChance !== undefined
-        ? {
-            key: "salvage",
-            icon: <BadgeCheck className="h-3.5 w-3.5 text-sky-500" aria-hidden="true" />,
-            label: `Salvage ${Math.round(salvageChance * 100)}%`,
-          }
-        : null,
-      {
-        key: "dc",
-        icon: <Target className="h-3.5 w-3.5 text-indigo-500" aria-hidden="true" />,
-        label: `DC ${dc}`,
-      },
-      {
-        key: "time",
-        icon: <Clock3 className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />,
-        label: formatMinutes(totalTime),
-      },
-      {
-        key: "feasible",
-        icon: <Gauge className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />,
-        label: `Feasible ${Number.isFinite(feasible) ? feasible : "∞"}`,
-      },
-    ].filter(Boolean) as { key: string; icon: ReactNode; label: string }[];
+    const consumptionSummary = RESOURCES.flatMap((resource) => {
+      const value = attemptCosts[resource];
+      if (!value) return [];
+      return [`${value} ${RESOURCE_LABELS[resource]}`];
+    }).join(", ");
+
+    const successPct = Math.round(profile.successChance * 100);
+    const salvagePct =
+      salvageChance !== undefined ? Math.round(salvageChance * 100) : undefined;
+    const feasibleLabel = Number.isFinite(feasible) ? feasible : "∞";
+    const feasibilityOk = feasible > 0;
+
+    const runButtonLabel = disabledReason ? "Unavailable" : `Run batch (${attempts})`;
 
     return (
-      <Card className="border-slate-200/80 bg-white/95 p-5 shadow-[0_16px_30px_rgba(15,23,42,0.08)]">
-        <CardHeader className="gap-2 pb-4">
-          <CardTitle className="text-2xl font-semibold text-slate-900">
+      <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-lg font-semibold text-slate-900">
             <span
               className={`bg-gradient-to-r ${TIER_GRADIENTS[tier]} bg-clip-text text-transparent`}
             >
               {rule.subtitle}
             </span>
           </CardTitle>
-          <CardDescription className="text-xs text-slate-500">
+          <CardDescription className="text-[11px] text-slate-500">
             {riskRule.timeMinutes} minutes per attempt · DC {dc}
             {tier === "T4" && wastedExtra > 0 ? (
-              <span className="ml-2 text-xs text-amber-600">
+              <span className="ml-1 text-amber-600">
                 {wastedExtra} RawAE wasted beyond DC {MIN_DC}
               </span>
             ) : null}
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-5 compact-gap md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-          <div className="flex flex-col gap-4">
-            <div className="grid gap-3 compact-gap sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-2 md:items-start">
+            <div className="space-y-3">
+              <div className="space-y-1">
                 <Label htmlFor={`${tier}-risk`}>Risk profile</Label>
                 <Select
                   value={risk}
@@ -683,7 +681,7 @@ export function NaturalEssenceCraftingApp({
                     setRiskSelections((prev) => ({ ...prev, [tier]: value as RiskLevel }))
                   }
                 >
-                  <SelectTrigger id={`${tier}-risk`}>
+                  <SelectTrigger id={`${tier}-risk`} className="h-9">
                     <SelectValue placeholder="Select risk" />
                   </SelectTrigger>
                   <SelectContent>
@@ -695,13 +693,15 @@ export function NaturalEssenceCraftingApp({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor={`${tier}-attempts`}>Attempts</Label>
-                <div className="flex items-center gap-2">
+
+              <div className="space-y-1">
+                <Label htmlFor={`${tier}-attempts`}>Batch size</Label>
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     type="button"
                     variant="outline"
                     aria-label="Decrease attempts"
+                    className={cn(focusRing, "h-9 w-9 p-0")}
                     onClick={() =>
                       setAttemptCounts((prev) => ({
                         ...prev,
@@ -722,12 +722,13 @@ export function NaturalEssenceCraftingApp({
                         [tier]: clampInt(Number(event.target.value), 1, 999),
                       }))
                     }
-                    className="w-[90px] text-center"
+                    className="h-9 w-24 text-center focus-visible:ring-2 focus-visible:ring-indigo-500"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     aria-label="Increase attempts"
+                    className={cn(focusRing, "h-9 w-9 p-0")}
                     onClick={() =>
                       setAttemptCounts((prev) => ({
                         ...prev,
@@ -739,8 +740,11 @@ export function NaturalEssenceCraftingApp({
                   </Button>
                   <Button
                     type="button"
-                    variant="ghost"
-                    className="ml-1 text-xs text-indigo-600 hover:text-indigo-700"
+                    variant="outline"
+                    className={cn(
+                      focusRing,
+                      "h-9 px-3 text-xs text-indigo-600 hover:text-indigo-700",
+                    )}
                     onClick={() =>
                       setAttemptCounts((prev) => ({
                         ...prev,
@@ -748,18 +752,20 @@ export function NaturalEssenceCraftingApp({
                       }))
                     }
                   >
-                    Fill max
+                    Max feasible
                   </Button>
                 </div>
               </div>
+
               {tier === "T4" ? (
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <div className="space-y-1">
                   <Label htmlFor="t4-extra">Extra RawAE per attempt</Label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button
                       type="button"
                       variant="outline"
                       aria-label="Decrease extra RawAE"
+                      className={cn(focusRing, "h-9 w-9 p-0")}
                       onClick={() => setT4ExtraRawAE((prev) => Math.max(0, prev - 1))}
                     >
                       <Minus className="h-4 w-4" aria-hidden="true" />
@@ -772,12 +778,13 @@ export function NaturalEssenceCraftingApp({
                       onChange={(event) =>
                         setT4ExtraRawAE(Math.max(0, Math.round(Number(event.target.value))))
                       }
-                      className="w-[90px] text-center"
+                      className="h-9 w-24 text-center focus-visible:ring-2 focus-visible:ring-indigo-500"
                     />
                     <Button
                       type="button"
                       variant="outline"
                       aria-label="Increase extra RawAE"
+                      className={cn(focusRing, "h-9 w-9 p-0")}
                       onClick={() => setT4ExtraRawAE((prev) => prev + 1)}
                     >
                       <Plus className="h-4 w-4" aria-hidden="true" />
@@ -787,85 +794,85 @@ export function NaturalEssenceCraftingApp({
                     </p>
                   </div>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-1.5">
-                  <Label>On success</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {producesOnSuccess.length > 0 ? (
-                      producesOnSuccess
-                    ) : (
-                      <span className="text-xs text-slate-500">No resource change.</span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs font-semibold text-slate-600">
-                Requirements for {attempts} attempt{attempts === 1 ? "" : "s"}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {requirementChips.length > 0 ? (
-                  requirementChips
-                ) : (
-                  <span className="text-xs text-slate-500">No resources required.</span>
-                )}
-              </div>
-            </div>
-
-            <Tooltip disableHoverableContent={!disabledReason}>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button
-                    type="button"
-                    onClick={() => runCrafting(tier)}
-                    disabled={Boolean(disabledReason)}
-                    className={cn(
-                      "w-full justify-center",
-                      disabledReason
-                        ? "cursor-not-allowed opacity-60"
-                        : "bg-indigo-600 text-white hover:bg-indigo-700",
-                    )}
-                  >
-                    {disabledReason ? "Unavailable" : "Run batch"}
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              {disabledReason ? (
-                <TooltipContent>{disabledReason}</TooltipContent>
               ) : null}
-            </Tooltip>
-          </div>
 
-          <div className="flex flex-col gap-4 rounded-xl border border-slate-200/70 bg-slate-50/70 p-4">
-            <div className="flex flex-wrap gap-2">
-              {infoPills.map((pill) => (
-                <Badge
-                  key={pill.key}
-                  variant="outline"
-                  className="gap-1 rounded-full border-slate-200/80 bg-white/90 text-xs text-slate-700 shadow-sm"
-                >
-                  {pill.icon}
-                  {pill.label}
-                </Badge>
-              ))}
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs font-semibold text-slate-600">Consumes per attempt</div>
-              <div className="flex flex-wrap gap-2">
-                {consumesPerAttempt.length > 0 ? (
-                  consumesPerAttempt
-                ) : (
-                  <span className="text-xs text-slate-500">No costs.</span>
-                )}
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium text-slate-500">
+                  Requirements for {attempts} attempt{attempts === 1 ? "" : "s"}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {requirementChips.length > 0 ? (
+                    requirementChips
+                  ) : (
+                    <span className="text-xs text-slate-500">No resources required.</span>
+                  )}
+                </div>
               </div>
+
+              <Tooltip disableHoverableContent={!disabledReason}>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      type="button"
+                      onClick={() => runCrafting(tier)}
+                      disabled={Boolean(disabledReason)}
+                      title={disabledReason ?? undefined}
+                      className={cn(
+                        focusRing,
+                        "w-full justify-center bg-indigo-600 text-white hover:bg-indigo-700",
+                        disabledReason ? "cursor-not-allowed opacity-60" : "",
+                      )}
+                    >
+                      {runButtonLabel}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {disabledReason ? <TooltipContent>{disabledReason}</TooltipContent> : null}
+              </Tooltip>
             </div>
 
-            {tier === "T4" ? (
+            <div className="space-y-3">
               <div className="space-y-2">
-                <div className="text-xs font-semibold text-slate-600">On success</div>
+                <p className="text-sm font-semibold text-slate-700">Snapshot</p>
+                <div className="flex flex-wrap gap-2">
+                  <Chip title="Chance main check succeeds">Success {successPct}%</Chip>
+                  {salvagePct !== undefined ? (
+                    <Chip title="Chance salvage succeeds">Salvage {salvagePct}%</Chip>
+                  ) : null}
+                  <Chip className="border-indigo-200 bg-indigo-50 text-indigo-700" title="Difficulty class">
+                    DC {dc}
+                  </Chip>
+                  <Chip ok={feasibilityOk} title="Attempts you can afford right now">
+                    Feasible {feasibleLabel}
+                  </Chip>
+                  <Chip
+                    className="border-slate-200 bg-white text-slate-700"
+                    title="Time required for this batch"
+                  >
+                    Time {formatMinutes(totalTime)}
+                  </Chip>
+                  <Chip
+                    className="border-slate-200 bg-white text-slate-700"
+                    title="Resources consumed each attempt"
+                  >
+                    Consumes {consumptionSummary || "nothing"}
+                  </Chip>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-700">Consumes per attempt</p>
+                <div className="flex flex-wrap gap-2">
+                  {consumesPerAttempt.length > 0 ? (
+                    consumesPerAttempt
+                  ) : (
+                    <span className="text-xs text-slate-500">No costs.</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-700">On success</p>
                 <div className="flex flex-wrap gap-2">
                   {producesOnSuccess.length > 0 ? (
                     producesOnSuccess
@@ -874,23 +881,23 @@ export function NaturalEssenceCraftingApp({
                   )}
                 </div>
               </div>
-            ) : null}
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <Calculator className="h-4 w-4 text-indigo-600" aria-hidden="true" />
-                Expected value per attempt
-                <Tooltip>
-                  <TooltipTrigger aria-label="Expected value explanation">
-                    <Info className="h-4 w-4 text-slate-400" aria-hidden="true" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Success, failure, and salvage chances combined into an average resource change per attempt.
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
-                {renderEvChips(tier, risk, extraRawAE, profile.successChance, salvageChance)}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <Calculator className="h-4 w-4 text-indigo-600" aria-hidden="true" />
+                  Expected value per attempt
+                  <Tooltip>
+                    <TooltipTrigger aria-label="Expected value explanation">
+                      <Info className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Success, failure, and salvage chances combined into an average resource change per attempt.
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {renderEvChips(tier, risk, extraRawAE, profile.successChance, salvageChance)}
+                </div>
               </div>
             </div>
           </div>
@@ -899,78 +906,91 @@ export function NaturalEssenceCraftingApp({
     );
   };
 
+
   return (
     <TooltipProvider>
-      <div className="flex flex-col gap-6 compact-gap pb-16">
-        <Card className="border-slate-200/80 bg-white/95 p-5 shadow-[0_12px_24px_rgba(15,23,42,0.06)]">
-          <CardHeader className="mb-0 gap-2">
-            <CardTitle className="flex items-center justify-between text-2xl font-semibold text-slate-900">
-              <span>Natural essence crafting</span>
+      <div data-compact={compactMode} className="flex flex-col gap-6 pb-16">
+        <header className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
               <FlaskConical className="h-7 w-7 text-indigo-600" aria-hidden="true" />
-            </CardTitle>
-            <CardDescription className="text-sm text-slate-500">
-              Track inventory, roll checks, and keep your refinement pipeline humming.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
-            <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700">
-              Session {formatMinutes(state.sessionMinutes)}
-            </Badge>
-            <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
-              Log entries {state.log.length}
-            </Badge>
-            <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700">
-              Recent rolls {state.rolls.checks.length + state.rolls.salvages.length}
-            </Badge>
-          </CardContent>
-        </Card>
+              <h1 className="text-2xl font-semibold text-slate-900">Natural essence crafting</h1>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Chip className="border-slate-200 bg-white text-slate-700" title="Session duration">
+                Session {formatMinutes(state.sessionMinutes)}
+              </Chip>
+              <Chip className="border-slate-200 bg-white text-slate-700" title="Log entries recorded">
+                Log {state.log.length}
+              </Chip>
+              <Chip className="border-slate-200 bg-white text-slate-700" title="Total recent rolls tracked">
+                Rolls {state.rolls.checks.length + state.rolls.salvages.length}
+              </Chip>
+            </div>
+          </div>
+          <p className="text-sm text-slate-600">
+            Track inventory, roll checks, and keep your refinement pipeline humming.
+          </p>
+        </header>
 
-        <div className="grid gap-4 compact-gap md:grid-cols-3">
-          <Card className="md:col-span-2 border-slate-200/80 bg-white/95 p-5 shadow-[0_12px_24px_rgba(15,23,42,0.06)]">
-            <CardHeader className="mb-0 gap-1.5">
-              <CardTitle className="text-xl font-semibold text-slate-900">Inventory</CardTitle>
-              <CardDescription className="text-xs text-slate-500">
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card className="md:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-lg font-semibold text-slate-900">Inventory</CardTitle>
+              <CardDescription className="text-[11px] text-slate-500">
                 Update your current stock. Crafting actions adjust automatically.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 compact-gap sm:grid-cols-2 xl:grid-cols-3">
-              {RESOURCES.map((resource) => (
-                <div key={resource} className="flex flex-col gap-1.5">
-                  <Label htmlFor={`inv-${resource}`} className="text-xs font-medium text-slate-600">
-                    {RESOURCE_LABELS[resource]}
-                  </Label>
-                  <Input
-                    id={`inv-${resource}`}
-                    type="number"
-                    min={0}
-                    value={state.inventory[resource]}
-                    onChange={(event) =>
-                      handleInventoryChange(resource, Math.max(0, Number(event.target.value)))
-                    }
-                    className="w-[96px]"
-                  />
-                </div>
-              ))}
-              <div className="flex flex-wrap gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={handleUndo}>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {RESOURCES.map((resource) => (
+                  <div key={resource} className="flex items-center justify-between gap-3">
+                    <Label htmlFor={`inv-${resource}`} className="text-sm font-medium text-slate-600">
+                      {RESOURCE_LABELS[resource]}
+                    </Label>
+                    <Input
+                      id={`inv-${resource}`}
+                      type="number"
+                      min={0}
+                      value={state.inventory[resource]}
+                      onChange={(event) =>
+                        handleInventoryChange(resource, Math.max(0, Number(event.target.value)))
+                      }
+                      className="h-9 w-24 text-right focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(focusRing, "h-9 px-3")}
+                  onClick={handleUndo}
+                >
                   <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" /> Undo
                 </Button>
-                <Button type="button" variant="destructive" onClick={handleClear}>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className={cn(focusRing, "h-9 px-3")}
+                  onClick={handleClear}
+                >
                   <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Clear
                 </Button>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200/80 bg-white/95 p-5 shadow-[0_12px_24px_rgba(15,23,42,0.06)]">
-            <CardHeader className="mb-0 gap-1.5">
-              <CardTitle className="text-xl font-semibold text-slate-900">Settings & rolls</CardTitle>
-              <CardDescription className="text-xs text-slate-500">
+          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-lg font-semibold text-slate-900">Settings & rolls</CardTitle>
+              <CardDescription className="text-[11px] text-slate-500">
                 Configure modifiers, rolling behaviour, and queue manual results.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-4 compact-gap">
-              <div className="grid gap-3 compact-gap sm:grid-cols-2">
+            <CardContent className="flex flex-col gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="modifier">Crafting modifier</Label>
                   <Input
@@ -986,7 +1006,7 @@ export function NaturalEssenceCraftingApp({
                         },
                       }))
                     }
-                    className="w-[96px]"
+                    className="h-9 w-24 focus-visible:ring-2 focus-visible:ring-indigo-500"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -1004,7 +1024,7 @@ export function NaturalEssenceCraftingApp({
                     }
                     disabled={state.settings.rollMode === "manual"}
                   >
-                    <SelectTrigger id="advantage">
+                    <SelectTrigger id="advantage" className="h-9">
                       <SelectValue placeholder="Select advantage mode" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1019,44 +1039,49 @@ export function NaturalEssenceCraftingApp({
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-2">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700">Auto rolling</p>
-                    <p className="text-[11px] text-slate-500">Toggle manual queues for precise control.</p>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                    <span>Manual</span>
-                    <Switch
-                      checked={state.settings.rollMode === "auto"}
-                      onCheckedChange={(checked) =>
-                        setState((prev) => ({
-                          ...prev,
-                          settings: {
-                            ...prev.settings,
-                            rollMode: checked ? "auto" : "manual",
-                          },
-                        }))
-                      }
-                      aria-label="Toggle auto rolling"
-                    />
-                    <span>Auto</span>
+              <div className="grid gap-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700">Auto rolling</p>
+                      <p className="text-[11px] text-slate-500">Toggle manual queues for precise control.</p>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                      <span>Manual</span>
+                      <Switch
+                        aria-label="Toggle auto rolling"
+                        checked={state.settings.rollMode === "auto"}
+                        onCheckedChange={(checked) =>
+                          setState((prev) => ({
+                            ...prev,
+                            settings: {
+                              ...prev.settings,
+                              rollMode: checked ? "auto" : "manual",
+                            },
+                          }))
+                        }
+                      />
+                      <span>Auto</span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-2">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700">Compact mode</p>
-                    <p className="text-[11px] text-slate-500">Reduce padding and gaps across the interface.</p>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700">Compact mode</p>
+                      <p className="text-[11px] text-slate-500">Reduce padding and gaps across the interface.</p>
+                    </div>
+                    <Switch
+                      aria-label="Toggle compact layout"
+                      checked={compactMode}
+                      onCheckedChange={(checked) => onToggleCompactMode(checked)}
+                    />
                   </div>
-                  <Switch
-                    checked={compactMode}
-                    onCheckedChange={(checked) => onToggleCompactMode(checked)}
-                    aria-label="Toggle compact layout"
-                  />
                 </div>
               </div>
 
-              <div className="grid gap-3 compact-gap">
+              <div className="space-y-3">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="manual-checks">Manual check rolls (comma separated)</Label>
                   <Input
@@ -1071,6 +1096,7 @@ export function NaturalEssenceCraftingApp({
                       }
                     }}
                     placeholder="e.g. 12,5,18"
+                    className="h-9 focus-visible:ring-2 focus-visible:ring-indigo-500"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -1087,17 +1113,23 @@ export function NaturalEssenceCraftingApp({
                       }
                     }}
                     placeholder="e.g. 7,16"
+                    className="h-9 focus-visible:ring-2 focus-visible:ring-indigo-500"
                   />
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" onClick={handleSmokeTests}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn(focusRing, "h-9 px-3")}
+                  onClick={handleSmokeTests}
+                >
                   <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" /> Smoke tests
                 </Button>
               </div>
 
-              <div className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-xs text-slate-600">
                 <p>
                   Recent rolls: {state.rolls.checks.length} main · {state.rolls.salvages.length} salvage.
                 </p>
@@ -1108,7 +1140,7 @@ export function NaturalEssenceCraftingApp({
         </div>
 
         {statusMessage ? (
-          <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-sm">
+          <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-sm">
             <BadgeCheck className="h-4 w-4" aria-hidden="true" />
             {statusMessage}
           </div>
@@ -1117,39 +1149,43 @@ export function NaturalEssenceCraftingApp({
         <Tabs
           value={activeTier}
           onValueChange={(value) => setActiveTier(value as TierKey)}
-          className="flex flex-col gap-5"
+          className="flex flex-col gap-4"
         >
-          <TabsList className="sticky top-0 z-10 w-full flex-wrap justify-start gap-2 rounded-full border border-slate-200/80 bg-white/90 p-1 shadow-sm backdrop-blur supports-[backdrop-filter]:backdrop-blur">
+          <TabsList className="grid grid-cols-4 sticky top-0 z-10 border-b border-slate-200 bg-slate-50/90 backdrop-blur">
             {TIER_ORDER.map((tier) => (
-              <TabsTrigger key={tier} value={tier}>
+              <TabsTrigger
+                key={tier}
+                value={tier}
+                className="rounded-none px-3 py-2 text-sm font-medium text-slate-600 data-[state=active]:border-b-2 data-[state=active]:border-indigo-500 data-[state=active]:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              >
                 {tier}
               </TabsTrigger>
             ))}
           </TabsList>
           {TIER_ORDER.map((tier) => (
-            <TabsContent key={tier} value={tier} className="mt-4">
+            <TabsContent key={tier} value={tier} className="pt-4">
               {renderTierPanel(tier)}
             </TabsContent>
           ))}
         </Tabs>
 
-        <div className="grid compact-gap gap-6 lg:grid-cols-[2fr_1fr]">
-          <div className="grid compact-gap gap-6 md:grid-cols-2">
-            <Card className="shadow-sm">
-              <CardHeader className="sticky top-0 z-10 mb-0 space-y-1 bg-white/95 pb-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
-                <CardTitle className="text-base font-semibold text-slate-900">Recent checks</CardTitle>
-                <CardDescription className="text-xs text-slate-500">
+        <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-lg font-semibold text-slate-900">Recent checks</CardTitle>
+                <CardDescription className="text-[11px] text-slate-500">
                   Latest main roll results with modifiers applied.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col max-h-80 overflow-y-auto pr-1 gap-3">
+              <CardContent className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-1">
                 {state.rolls.checks.length === 0 ? (
                   <p className="text-xs text-slate-500">No rolls yet.</p>
                 ) : (
                   state.rolls.checks.map((roll) => (
                     <div
                       key={roll.id}
-                      className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+                      className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
                     >
                       <div className="flex items-center justify-between text-[11px] text-slate-500">
                         <span>{new Date(roll.timestamp).toLocaleTimeString()}</span>
@@ -1157,7 +1193,7 @@ export function NaturalEssenceCraftingApp({
                           {roll.tier} · {roll.risk}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between font-mono text-sm text-slate-900">
+                      <div className="flex items-center justify-between font-mono text-xs text-slate-900">
                         <span>
                           d20 {roll.raw} + {roll.modifier} = {roll.total}
                         </span>
@@ -1165,28 +1201,28 @@ export function NaturalEssenceCraftingApp({
                           {roll.success ? "✓" : "✗"}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-500">DC {roll.dc}</p>
+                      <p className="font-mono text-[11px] text-slate-500">DC {roll.dc}</p>
                     </div>
                   ))
                 )}
               </CardContent>
             </Card>
 
-            <Card className="shadow-sm">
-              <CardHeader className="sticky top-0 z-10 mb-0 space-y-1 bg-white/95 pb-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur">
-                <CardTitle className="text-base font-semibold text-slate-900">Recent salvage</CardTitle>
-                <CardDescription className="text-xs text-slate-500">
+            <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-lg font-semibold text-slate-900">Recent salvage</CardTitle>
+                <CardDescription className="text-[11px] text-slate-500">
                   Salvage checks from failed attempts.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col max-h-80 overflow-y-auto pr-1 gap-3">
+              <CardContent className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-1">
                 {state.rolls.salvages.length === 0 ? (
                   <p className="text-xs text-slate-500">No salvage rolls yet.</p>
                 ) : (
                   state.rolls.salvages.map((roll) => (
                     <div
                       key={roll.id}
-                      className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+                      className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
                     >
                       <div className="flex items-center justify-between text-[11px] text-slate-500">
                         <span>{new Date(roll.timestamp).toLocaleTimeString()}</span>
@@ -1194,7 +1230,7 @@ export function NaturalEssenceCraftingApp({
                           {roll.tier} · {roll.risk}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between font-mono text-sm text-slate-900">
+                      <div className="flex items-center justify-between font-mono text-xs text-slate-900">
                         <span>
                           d20 {roll.raw} + {roll.modifier} = {roll.total}
                         </span>
@@ -1202,7 +1238,7 @@ export function NaturalEssenceCraftingApp({
                           {roll.success ? "✓" : "✗"}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-500">DC {roll.dc}</p>
+                      <p className="font-mono text-[11px] text-slate-500">DC {roll.dc}</p>
                     </div>
                   ))
                 )}
@@ -1210,21 +1246,21 @@ export function NaturalEssenceCraftingApp({
             </Card>
           </div>
 
-          <Card className="shadow-sm">
-            <CardHeader>
+          <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <CardHeader className="space-y-1">
               <CardTitle className="text-lg font-semibold text-slate-900">Action log</CardTitle>
-              <CardDescription className="text-sm text-slate-500">
+              <CardDescription className="text-[11px] text-slate-500">
                 Latest attempts with resource deltas.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col max-h-80 overflow-y-auto pr-1 text-sm gap-3">
+            <CardContent className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-1 text-sm">
               {state.log.length === 0 ? (
                 <p className="text-xs text-slate-500">No crafting actions yet.</p>
               ) : (
                 state.log.map((entry) => (
                   <div
                     key={entry.id}
-                    className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
+                    className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
                   >
                     <div className="flex items-center justify-between text-[11px] text-slate-500">
                       <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
@@ -1243,5 +1279,6 @@ export function NaturalEssenceCraftingApp({
       <DiceOverlay rolls={diceOverlay} />
     </TooltipProvider>
   );
+
 
 }
