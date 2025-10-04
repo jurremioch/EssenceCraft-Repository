@@ -67,7 +67,17 @@ const RESOURCE_LABELS: Record<keyof Inventory, string> = {
 };
 
 const MAX_ROLL_HISTORY = 12;
-const MAX_LOG_ENTRIES = 120;
+
+const MAX_LOG_ENTRIES = (() => {
+  const raw = import.meta.env.VITE_MAX_LOG_ENTRIES;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return 200;
+})();
 
 type RollMode = "auto" | "manual";
 
@@ -1253,7 +1263,7 @@ export function NaturalEssenceCraftingApp({
                 Latest attempts with resource deltas.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-1 text-sm">
+            <CardContent className="flex max-h-96 flex-col gap-3 overflow-y-auto pr-1 text-sm">
               {state.log.length === 0 ? (
                 <p className="text-xs text-slate-500">No crafting actions yet.</p>
               ) : (
