@@ -48,6 +48,7 @@ import {
   type ActionLogEntry,
   type RollRecord,
   useNaturalEssenceStore,
+  useResetStoreOnMissingPersistedState,
 } from "@/app/store";
 import { clampInt, cn, d20, formatMinutes, parseCSVInts } from "@/lib/util";
 
@@ -171,6 +172,7 @@ export function NaturalEssenceCraftingApp({
   compactMode,
   onToggleCompactMode,
 }: NaturalEssenceCraftingAppProps) {
+  useResetStoreOnMissingPersistedState();
   const inventory = useNaturalEssenceStore((store) => store.inventory);
   const settings = useNaturalEssenceStore((store) => store.settings);
   const log = useNaturalEssenceStore((store) => store.log);
